@@ -51,6 +51,44 @@
     // Single HTML-escaper for the whole file (was duplicated 3× with drifting behavior).
     function esc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
+    // ── Fuzzy text matching for de-duplicating the "what's missing" questions ──
+    // The three gap sources (understanding.missing / .clarifying / strength.missing_evidence)
+    // routinely say the same thing in different words, so near-duplicates must collapse.
+    // Length-preserving fold (ë→e, ç→c), same idea as ligjet-search.js.
+    function gapFold(s){ return String(s == null ? '' : s).toLowerCase().replace(/ë/g,'e').replace(/ç/g,'c').replace(/[^a-z0-9\s]/g,' ').replace(/\s+/g,' ').trim(); }
+    var GAP_STOP={ te:1,per:1,nga:1,dhe:1,ose:1,qe:1,nje:1,eshte:1,jane:1,ka:1,kane:1,juaj:1,tuaj:1,kete:1,kesaj:1,apo:1,ndonje:1,pala:1,rastin:1,duhet:1,mund:1,ne:1,me:1,nuk:1,sipas:1 };
+    // Albanian is heavily inflected — "kontratë"/"kontrata"/"kontratës" are the same word to a
+    // reader but different strings. Strip one common ending (longest first) so they collapse,
+    // while keeping the stem ≥4 chars so distinct words ("kontratë" vs "kontroll") stay apart.
+    var GAP_SUF=['eve','ave','ove','ive','esh','ish','ur','it','in','un','es','et','ve','sh','te','ta','ti','ja','en','a','e','i','u','t','n'];
+    function gapStem(w){
+      if(w.length<=4) return w;
+      for(var i=0;i<GAP_SUF.length;i++){
+        var s=GAP_SUF[i];
+        if(w.length-s.length>=4 && w.slice(-s.length)===s) return w.slice(0,w.length-s.length);
+      }
+      return w;
+    }
+    function gapTokens(s){ var out=[],seen={}; gapFold(s).split(' ').forEach(function(w){ if(w.length>2&&!GAP_STOP[w]){ var k=gapStem(w); if(!seen[k]){ seen[k]=1; out.push(k); } } }); return out; }
+    // Containment (hits / shorter length), NOT Jaccard: a short question and a long restatement
+    // of the same gap must still match — Jaccard would score them far apart.
+    function gapSimilar(a,b){
+      var A=gapTokens(a), B=gapTokens(b); if(!A.length||!B.length) return 0;
+      var m={},hit=0; A.forEach(function(w){ m[w]=1; }); B.forEach(function(w){ if(m[w]) hit++; });
+      return hit/Math.min(A.length,B.length);
+    }
+    // Union a field across the 3 self-consistency samples, fuzzy-dedup, rank by agreement.
+    // No hard ≥2 vote: at temps .12/.25/.4 the phrasings differ, so exact voting yields nothing.
+    function mergeQ(lists){
+      var out=[];
+      (lists||[]).forEach(function(arr){ (arr||[]).forEach(function(x){
+        x=String(x==null?'':x).trim(); if(!x||x==='...') return;
+        for(var i=0;i<out.length;i++){ if(gapSimilar(out[i].q,x)>=0.6){ out[i].n++; return; } }
+        out.push({q:x,n:1});
+      }); });
+      return out.sort(function(a,b){ return b.n-a.n; }).map(function(o){ return o.q; });
+    }
+
     // ── Canonical limitation (parashkrim) rules ── ONE table for every tool.
     // Both the Opinion engine (checkLimitation) and the Parashkrim calculator (solCompute)
     // read from here, so the same case can never get two different verdicts.
@@ -313,88 +351,290 @@
 
     // ── Legal Glossary ────────────────────────────
     (function () {
-      var _glTerms = [
-        'gjykata', 'prokurori', 'gjyqtar', 'paditës', 'i pandehur',
-        'trashëgimtar', 'kreditor', 'debitor', 'noterizim', 'ekzekutim',
-        'apelim', 'rekurs', 'padi', 'vendim', 'urdhër',
-        'neni', 'kreu', 'klauzolë', 'kontratë', 'pronësi',
-        'garanci', 'kaution', 'arbitrazh', 'ndërmjetës'
+      // ~240 Albanian legal terms in 12 categories. Terms are GLOBALLY UNIQUE: the string is
+      // simultaneously the label, the AI prompt argument and the cache key, so shared
+      // procedural words are disambiguated (e.g. "apel penal" vs "ankim (apel) civil").
+      // Each category carries its law file so linkNene points "Neni X" at the right code.
+      var _glCats = [
+        { n:'Konceptet themelore', law:'kodi-civil.html', t:[
+          'normë juridike','subjekt i së drejtës','zotësi juridike','zotësi për të vepruar','e drejtë subjektive',
+          'detyrim juridik','fakt juridik','veprim juridik','akt normativ','hierarkia e normave',
+          'interpretim i ligjit','analogji ligjore','parashkrim','dekadencë','afat procedural',
+          'prezumim ligjor','barra e provës','gjë e gjykuar','ligj material','ligj procedural','fuqi prapavepruese',
+          'neni','kreu','urdhër','vendim'] },
+
+        { n:'Kushtetuta & të drejtat themelore', law:'kushtetuta.html', t:[
+          'kushtetutshmëri','Gjykata Kushtetuese','ndarja e pushteteve','sovranitet','shtetësi','referendum',
+          'imunitet','e drejta e jetës','liria e shprehjes','liria e besimit','e drejta e pronës',
+          'proces i rregullt ligjor','akses në gjykatë','ankim kushtetues','dekret presidencial',
+          'Avokati i Popullit','gjendje e jashtëzakonshme','marrëveshje ndërkombëtare','barazi para ligjit',
+          'mbrojtje e të dhënave personale','gjykatë','gjyqtar','prokuroria','avokat'] },
+
+        { n:'Pronë & të drejta reale', law:'kodi-civil.html', t:[
+          'pronësi','posedim','mbajtje','bashkëpronësi','pronësi e përbashkët','servitut','uzufrukt',
+          'e drejta e përdorimit','e drejta e banimit','hipotekë','peng','barrë siguruese','regjistrim pasurie',
+          'kartelë pasurie','padi rivendikuese','padi mohuese','fitim pronësie me parashkrim','aksesion',
+          'tjetërsim','shpronësim për interes publik','e drejta e parablerjes','uzurpim'] },
+
+        { n:'Detyrime & kontrata', law:'kodi-civil.html', t:[
+          'kontratë','ofertë','pranim i ofertës','pëlqim','shkak i kontratës','objekt i kontratës',
+          'formë e detyrueshme','pavlefshmëri absolute','pavlefshmëri relative','anulim kontrate',
+          'zgjidhje kontrate','mospërmbushje','vonesë në përmbushje','kamatëvonesë','dëmshpërblim',
+          'dëm i dalshëm','fitim i munguar','dëm jopasuror','forcë madhore','klauzolë penale','kaparr',
+          'dorëzani','cedim i kredisë','subrogim','kompensim detyrimesh','pasurim pa shkak',
+          'përgjegjësi jashtëkontraktore','garanci','kaution','kreditor','debitor'] },
+
+        { n:'Familje & trashëgimi', law:'kodi-familjes.html', t:[
+          'martesë','kurorëzim','regjim pasuror martesor','pasuri në bashkësi','zgjidhje e martesës',
+          'ndarje faktike','përgjegjësi prindërore','kujdestari','e drejta e takimit','detyrim ushqimor',
+          'atësi','birësim','dhunë në marrëdhëniet familjare','urdhër mbrojtjeje','trashëgimi ligjore',
+          'trashëgimi me testament','testament olograf','testament noterial','trashëgimtar ligjor','legatar',
+          'rezervë ligjore','pjesë e disponueshme','heqje dorë nga trashëgimia','dëshmi trashëgimie'] },
+
+        { n:'E drejta penale — pjesa e përgjithshme', law:'kodi-penal.html', t:[
+          'vepër penale','krim','kundërvajtje penale','përbërja e veprës penale','objekt i veprës penale',
+          'ana objektive','subjekt i veprës penale','ana subjektive','dashje','pakujdesi','lidhje shkakësore',
+          'tentativë','bashkëpunim në vepër penale','organizator','shtytës','ndihmës','mbrojtje e nevojshme',
+          'nevojë ekstreme','papërgjegjshmëri','rrethana lehtësuese','rrethana rënduese','recidivizëm',
+          'burgim','gjobë penale','pezullim i ekzekutimit të dënimit','lirim me kusht','amnisti','falje'] },
+
+        { n:'Procedura penale', law:'kodi-procedure-penale.html', t:[
+          'kallëzim penal','regjistrim i procedimit','hetim paraprak','prokuror','oficer i policisë gjyqësore',
+          'i dyshuar','i pandehur','mbrojtës','mbrojtje e detyrueshme','e drejta e heshtjes',
+          'masë sigurie personale','arrest në burg','arrest në shtëpi','detyrim paraqitjeje','ndalim',
+          'arrestim në flagrancë','sekuestro provash','kontroll','këqyrje','përballje','seancë paraprake',
+          'gjykim i shkurtuar','marrëveshje për pranimin e fajësisë','apel penal','rekurs penal',
+          'rishikim i vendimit'] },
+
+        { n:'Procedura civile', law:'kodi-procedure-civile.html', t:[
+          'padi','kërkesëpadi','kundërpadi','palë ndërgjyqëse','legjitimim aktiv','legjitimim pasiv',
+          'ndërhyrje kryesore','ndërhyrje dytësore','juridiksion','kompetencë lëndore','kompetencë tokësore',
+          'njoftim procedural','seancë përgatitore','seancë gjyqësore','provë','provë me shkresë','dëshmitar',
+          'ekspertizë','masë e sigurimit të padisë','pezullim i gjykimit','pushim i gjykimit','vendim gjyqësor',
+          'formë e prerë','ankim (apel) civil','rekurs në Gjykatën e Lartë','shpenzime gjyqësore',
+          'paditës','i paditur','apelim'] },
+
+        { n:'Shoqëri tregtare & biznes', law:'shoqerite-tregtare.html', t:[
+          'tregtar','veprimtari tregtare','regjistrim në QKB','shoqëri me përgjegjësi të kufizuar',
+          'shoqëri aksionare','shoqëri kolektive','shoqëri komandite','kapital themeltar','kuotë','aksion',
+          'ortak','aksionar','asamble e përgjithshme','administrator','këshill administrimi',
+          'këshill mbikëqyrës','dividend','statut','akt themelimi','bashkim shoqërish','ndarje shoqërie',
+          'transformim','likuidim','degë e shoqërisë së huaj','konkurrencë e pandershme'] },
+
+        { n:'Falimentim & ekzekutim', law:'falimentimi.html', t:[
+          'paaftësi paguese','mbingarkesë me borxhe','procedurë falimentimi','masa e falimentimit',
+          'administrator falimentimi','kreditor i siguruar','kreditor i pasiguruar','radhë e kreditorëve',
+          'plan riorganizimi','përmbarues gjyqësor privat','titull ekzekutiv','ekzekutim i detyrueshëm',
+          'sekuestro konservative','sekuestro ekzekutive','ankand publik','vlerësim i pasurisë',
+          'shpërndarje e të ardhurave','kundërshtim i veprimeve përmbarimore'] },
+
+        { n:'Administrative, doganore & rrugore', law:'kodi-doganor.html', t:[
+          'akt administrativ','akt nënligjor','organ administrativ','procedurë administrative',
+          'ankim administrativ','heshtje administrative','pavlefshmëri e aktit administrativ','revokim i aktit',
+          'gjykatë administrative','deklaratë doganore','regjim doganor','import','eksport','transit',
+          'tarifë doganore','vlerë doganore','origjinë e mallrave','magazinim doganor','kontrabandë',
+          'patentë drejtimi','pikë penalizuese','gjobë rrugore','aksident rrugor','sigurim i detyrueshëm TPL',
+          'operator ajror','hapësirë ajrore'] },
+
+        { n:'Noteria, aktet & provat', law:'noteria.html', t:[
+          'noter','akt noterial','formë noteriale','legalizim i nënshkrimit','vërtetim kopjeje','prokurë',
+          'prokurë e posaçme','prokurë e përgjithshme','deklaratë noteriale','regjistër noterial',
+          'kopje e njësuar','datë e sigurt','dokument publik','dokument privat','vërtetësi e dokumentit',
+          'falsifikim dokumenti','apostilë','përkthim zyrtar','arkivë noteriale','arbitrazh','ndërmjetës',
+          'noterizim','ekzekutim'] }
       ];
-      // Definitions cache persists across sessions (LRU-capped) — repeat lookups cost nothing.
-      var GL_LS = 'gl-cache-v1', GL_MAX = 50;
+
+      // Length-preserving fold so "padites" finds "paditës" (same idea as ligjet-search.js).
+      function glFold(s){ return String(s == null ? '' : s).toLowerCase().replace(/ë/g,'e').replace(/ç/g,'c'); }
+
+      // Definitions cache persists across sessions. v2: new prompt + new entry shape, and the
+      // cap had to grow — 50 would thrash badly against 240 terms.
+      var GL_LS = 'gl-cache-v2', GL_MAX = 240, GL_PROMPT_V = 2;
       var _glCache = {};
       try { _glCache = JSON.parse(localStorage.getItem(GL_LS) || '{}') || {}; } catch (e) { _glCache = {}; }
-      // One-time cleanup: an earlier bug could have cached the literal failure string forever.
-      Object.keys(_glCache).forEach(function (k) { if (_glCache[k] && _glCache[k].v === 'Gabim.') delete _glCache[k]; });
-      function glPersist() { try { localStorage.setItem(GL_LS, JSON.stringify(_glCache)); } catch (e) {} }
+      try { localStorage.removeItem('gl-cache-v1'); } catch (e) {}
+      var _glDirty = false, _glTimer = null;
+      function glWrite() {
+        _glTimer = null; if (!_glDirty) return;
+        try { localStorage.setItem(GL_LS, JSON.stringify(_glCache)); _glDirty = false; }
+        catch (e) {
+          // Quota hit: drop the oldest half and retry once, else every future write would
+          // fail silently forever (the old bare catch{} did exactly that).
+          try {
+            var keys = Object.keys(_glCache).sort(function (a, b) { return (_glCache[a].t || 0) - (_glCache[b].t || 0); });
+            keys.slice(0, Math.ceil(keys.length / 2)).forEach(function (k) { delete _glCache[k]; });
+            localStorage.setItem(GL_LS, JSON.stringify(_glCache)); _glDirty = false;
+          } catch (e2) {}
+        }
+      }
+      // Debounced: a cache HIT used to trigger a full stringify + write of the whole map.
+      function glPersistSoon() { _glDirty = true; if (!_glTimer) _glTimer = setTimeout(glWrite, 500); }
+      window.addEventListener('pagehide', glWrite);
       function glGet(term) {
         var e = _glCache[term];
-        if (!e || typeof e.v !== 'string') return null;
-        e.t = Date.now(); glPersist();
+        if (!e || typeof e.v !== 'string' || e.p !== GL_PROMPT_V) return null;  // prompt bump self-invalidates
+        e.t = Date.now(); glPersistSoon();
         return e.v;
       }
       function glPut(term, txt) {
-        _glCache[term] = { v: txt, t: Date.now() };
+        _glCache[term] = { v: txt, t: Date.now(), p: GL_PROMPT_V };
         var keys = Object.keys(_glCache);
         if (keys.length > GL_MAX) {
           keys.sort(function (a, b) { return (_glCache[a].t || 0) - (_glCache[b].t || 0); });
           keys.slice(0, keys.length - GL_MAX).forEach(function (k) { delete _glCache[k]; });
         }
-        glPersist();
+        glPersistSoon();
       }
-      var _glActive = null;
 
       var termsEl  = document.getElementById('glossary-terms');
       var resultEl = document.getElementById('glossary-result');
       var searchEl = document.getElementById('glossary-search');
+      var emptyEl  = document.getElementById('glossary-empty');
+      var lookupEl = document.getElementById('glossary-lookup');
+      var qEl      = document.getElementById('gl-q');
+      if (!termsEl || !resultEl || !searchEl) return;
 
-      _glTerms.forEach(function (term) {
-        var btn = document.createElement('button');
-        btn.className = 'gl-term';
-        btn.textContent = term;
-        btn.addEventListener('click', function () {
-          if (_glActive) _glActive.classList.remove('active');
-          _glActive = btn;
-          btn.classList.add('active');
-          resultEl.hidden = false;
-          if (!aiConfigured()) { toolFail(resultEl, 'Shërbimi AI nuk është i konfiguruar (mungon çelësi).'); return; }
-
-          var cached = glGet(term);
-          if (cached) { resultEl.textContent = cached; return; }
-
-          resultEl.textContent = 'Duke kërkuar…';
-          aiFetch({
-            method: 'POST',
-            headers: { 'Authorization': 'Bearer ' + GROQ_KEY, 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              model: 'llama-3.3-70b-versatile',
-              max_tokens: 200,
-              messages: [
-                { role: 'system', content: 'Jeni jurist shqiptar. Jepni definicione juridike të qarta dhe praktike.' },
-                { role: 'user',   content: 'Shpjego termin juridik "' + term + '" sipas legjislacionit shqiptar. Jep: 1) Definicion (2 fjali), 2) Ku gjendet zakonisht (ligjet kryesore), 3) Shembull praktik. Max 6 fjali total.' }
-              ]
-            })
-          })
-          .then(function (r) { if (!r.ok) { var e = new Error('http'); e.status = r.status; throw e; } return r.json(); })
-          .then(function (data) {
-            var txt = data.choices && data.choices[0] && data.choices[0].message.content;
-            // Only cache a real answer — an empty/malformed response must stay retryable,
-            // never get baked into localStorage as a permanent "definition".
-            if (!txt) { toolFail(resultEl, 'Përgjigje boshe nga modeli — provoni sërish.', function () { btn.click(); }); return; }
-            glPut(term, txt);
-            resultEl.textContent = txt;
-          })
-          .catch(function (err) { toolFail(resultEl, aiErrMsg(err && err.status, err), function () { btn.click(); }); });
+      // ── Build the collapsible category groups (collapsed by default) ──
+      var _glSeen = {}, _glTotal = 0;
+      _glCats.forEach(function (cat) {
+        var d = document.createElement('details');
+        d.className = 'gl-group';
+        d.dataset.law = cat.law;
+        var s = document.createElement('summary');
+        s.appendChild(document.createTextNode(cat.n));
+        var cnt = document.createElement('span');
+        cnt.className = 'gl-count';
+        var wrap = document.createElement('div');
+        wrap.className = 'gl-terms';
+        var n = 0;
+        cat.t.forEach(function (term) {
+          if (_glSeen[term]) return;              // guard: term is also the cache key
+          _glSeen[term] = 1; n++; _glTotal++;
+          var btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'gl-term';
+          btn.textContent = term;
+          btn.dataset.term = term;
+          btn.dataset.fold = glFold(term);
+          wrap.appendChild(btn);
         });
-        termsEl.appendChild(btn);
+        cnt.textContent = String(n);
+        cnt.dataset.total = String(n);
+        s.appendChild(cnt);
+        d.appendChild(s);
+        d.appendChild(wrap);
+        termsEl.appendChild(d);
       });
 
+      // ── Lookup (shared by pill clicks, the AI button and Enter) ──
+      var _glCtrl = null, _glSeq = 0, _glActive = null;
+      function glLookup(term, lawFile, sourceBtn) {
+        if (_glCtrl) _glCtrl.abort();
+        var ctrl = _glCtrl = new AbortController();
+        var my = ++_glSeq;                        // the controller alone still loses to an
+        var law = lawFile || 'kodi-civil.html';   // already-resolved earlier response
+        resultEl.hidden = false;
+        if (emptyEl) emptyEl.hidden = true;
+        if (!aiConfigured()) { toolFail(resultEl, 'Shërbimi AI nuk është i konfiguruar (mungon çelësi).'); _glCtrl = null; return; }
+
+        var cached = glGet(term);
+        if (cached) { resultEl.innerHTML = toolMd(cached, law); _glCtrl = null; return; }
+
+        resultEl.textContent = 'Duke kërkuar…';
+        if (lookupEl) lookupEl.textContent = 'Anulo';
+        aiFetch({
+          signal: ctrl.signal,
+          body: JSON.stringify({
+            max_tokens: 320,
+            messages: [
+              { role: 'system', content: 'Jeni jurist shqiptar. Jepni definicione juridike të qarta, të sakta dhe praktike. Cito nene vetëm kur je i sigurt.' },
+              { role: 'user',   content: 'Shpjego termin juridik "' + term + '" sipas legjislacionit shqiptar. Struktura:\n**Definicion** — 2 fjali të qarta.\n**Ku gjendet** — ligji/kodi kryesor dhe neni nëse je i sigurt.\n**Shembull praktik** — një rast i shkurtër.\nMax 7 fjali gjithsej. Nëse termi nuk është juridik, thuaje shkurt.' }
+            ]
+          })
+        })
+        .then(function (r) { if (!r.ok) { var e = new Error('http'); e.status = r.status; throw e; } return r.json(); })
+        .then(function (data) {
+          if (my !== _glSeq) return;              // a newer lookup superseded this one
+          var txt = data.choices && data.choices[0] && data.choices[0].message.content;
+          // Never cache an empty answer — it must stay retryable.
+          if (!txt) { toolFail(resultEl, 'Përgjigje boshe nga modeli — provoni sërish.', function () { glLookup(term, law, sourceBtn); }); return; }
+          glPut(term, txt);
+          resultEl.innerHTML = toolMd(txt, law);
+        })
+        .catch(function (err) {
+          if (my !== _glSeq) return;
+          if (err && err.name === 'AbortError') return;
+          toolFail(resultEl, aiErrMsg(err && err.status, err), function () { glLookup(term, law, sourceBtn); });
+        })
+        .then(function () {
+          if (my === _glSeq) { _glCtrl = null; if (lookupEl) lookupEl.textContent = 'Kërko me AI →'; }
+        });
+      }
+
+      // One delegated listener instead of ~240 individual ones.
+      termsEl.addEventListener('click', function (e) {
+        var btn = e.target.closest ? e.target.closest('.gl-term') : null;
+        if (!btn || !termsEl.contains(btn)) return;
+        if (_glActive) _glActive.classList.remove('active');
+        _glActive = btn; btn.classList.add('active');
+        var grp = btn.closest('.gl-group');
+        glLookup(btn.dataset.term, grp && grp.dataset.law, btn);
+      });
+
+      // ── Search: filter across every category, auto-expand hits, offer AI when none ──
+      var _glDebounce = null;
+      function glFilter() {
+        var raw = searchEl.value.trim(), q = glFold(raw), total = 0;
+        Array.prototype.forEach.call(termsEl.querySelectorAll('.gl-group'), function (grp) {
+          var shown = 0;
+          Array.prototype.forEach.call(grp.querySelectorAll('.gl-term'), function (b) {
+            var hit = true;
+            if (q) {
+              var f = b.dataset.fold;
+              // word-prefix match, plus substring once the query is long enough — a bare
+              // "i" used to match half the list with the old .includes() rule
+              hit = f.split(' ').some(function (w) { return w.indexOf(q) === 0; }) || (q.length >= 3 && f.indexOf(q) !== -1);
+            }
+            b.hidden = !hit; if (hit) shown++;
+          });
+          total += shown;
+          var cnt = grp.querySelector('.gl-count');
+          if (cnt) cnt.textContent = q ? (shown + ' / ' + cnt.dataset.total) : cnt.dataset.total;
+          grp.hidden = !!q && shown === 0;
+          grp.open = !!q && shown > 0;
+        });
+        if (emptyEl) {
+          var none = !!q && total === 0;
+          emptyEl.hidden = !none;
+          if (qEl) qEl.textContent = raw;
+          // Hide the stale definition: it belonged to a previous term, not to what was typed.
+          if (none) resultEl.hidden = true;
+        }
+      }
       searchEl.addEventListener('input', function () {
-        var q = searchEl.value.trim().toLowerCase();
-        termsEl.querySelectorAll('.gl-term').forEach(function (b) {
-          b.hidden = q.length > 0 && !b.textContent.toLowerCase().includes(q);
-        });
+        clearTimeout(_glDebounce);
+        _glDebounce = setTimeout(glFilter, 150);
       });
+
+      // AI lookup for a word that isn't in the dictionary. Never fires on keystroke —
+      // only Enter or the explicit button.
+      var GL_FREE_RE = /^[A-Za-zÇçËë0-9 .\-']{2,60}$/;
+      function glFreeLookup() {
+        var raw = searchEl.value.trim();
+        if (!raw || !GL_FREE_RE.test(raw)) return;
+        if (_glCtrl) { _glCtrl.abort(); _glCtrl = null; if (lookupEl) lookupEl.textContent = 'Kërko me AI →'; return; }
+        var f = glFold(raw), exact = null;
+        Array.prototype.forEach.call(termsEl.querySelectorAll('.gl-term'), function (b) {
+          if (!exact && b.dataset.fold === f) exact = b;
+        });
+        if (exact) { exact.click(); return; }     // hits the cache instead of re-asking
+        if (_glActive) { _glActive.classList.remove('active'); _glActive = null; }
+        glLookup(raw, 'kodi-civil.html', null);
+      }
+      searchEl.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); clearTimeout(_glDebounce); glFilter(); glFreeLookup(); }
+      });
+      if (lookupEl) lookupEl.addEventListener('click', glFreeLookup);
     }());
 
     // ── Penalty Estimator → now handled by the RichReport engine (penConfig) at end of script ──
@@ -528,7 +768,10 @@
       var valid=(samples||[]).filter(Boolean), n=valid.length||1, thr=n>=2?2:1;
       var cnt={}, disp={}, arts={}, rel={}, understanding=null;
       valid.forEach(function(j){
-        if(!understanding && j.facts) understanding={facts:j.facts||{},key_events:j.key_events||[],missing:j.missing||[],clarifying:j.clarifying||[]};
+        // facts/key_events stay first-sample-wins (they must remain internally coherent),
+        // but missing/clarifying are unioned across all samples below — otherwise samples
+        // 2–3's questions were discarded wholesale just because sample 1 had facts.
+        if(!understanding && j.facts) understanding={facts:j.facts||{},key_events:j.key_events||[],missing:[],clarifying:[]};
         (j.laws||[]).forEach(function(l){
           var name=String(l&&l.name||'').trim(); if(!name) return; var k=name.toLowerCase();
           cnt[k]=(cnt[k]||0)+1; disp[k]=disp[k]||name; if(l.relevance && !rel[k]) rel[k]=l.relevance;
@@ -539,7 +782,10 @@
         .sort(function(a,b){ return cnt[b]-cnt[a]; })
         .map(function(k){ return { name:disp[k], articles:Object.keys(arts[k]), relevance:rel[k]||'' }; });
       if(!laws.length){ var first=valid[0]; laws=(first&&first.laws)||[]; }
-      return { laws:laws, understanding:understanding||{facts:{},key_events:[],missing:[],clarifying:[]} };
+      var u=understanding||{facts:{},key_events:[],missing:[],clarifying:[]};
+      u.missing=mergeQ(valid.map(function(j){ return j.missing; }));
+      u.clarifying=mergeQ(valid.map(function(j){ return j.clarifying; }));
+      return { laws:laws, understanding:u };
     }
 
     // ── Article cross-linking → full law text (absolute URLs so links work in saved PDFs too) ──
@@ -999,7 +1245,7 @@
         function bullets(title,cls,arr){ if(!arr||!arr.length) return ''; var h='<p class="op-subhead '+cls+'">'+title+'</p><ul class="opinion-list">'; arr.forEach(function(x){ h+='<li>'+esc(x)+'</li>'; }); return h+'</ul>'; }
         html+=bullets('Forcat e pozicionit','op-green',s.strengths);
         html+=bullets('Dobësi dhe rreziqe','op-amber',s.weaknesses);
-        html+=bullets('Prova që mungojnë','op-red',s.missing_evidence);
+        // missing_evidence now lives solely in the answerable "Çfarë mungon" block
         $('op-out-analysis').innerHTML=html;
       }
 
@@ -1289,19 +1535,65 @@
         var grid=row('Palët',f.parties)+row('Data',f.dates)+row('Shuma',f.amounts)+row('Lloji i kërkesës',f.claim_type)+row('Juridiksioni',f.jurisdiction);
         var html=grid?('<div class="op-fact-grid">'+grid+'</div>'):'';
         if(u.key_events&&u.key_events.length){ html+='<p class="op-subhead" style="margin:12px 0 4px;">Ngjarjet kryesore (si i kuptuam)</p><ul class="opinion-list">'+u.key_events.map(function(x){ return '<li>'+esc(x)+'</li>'; }).join('')+'</ul>'; }
-        if(u.missing&&u.missing.length){ html+='<p class="op-subhead op-amber" style="margin:12px 0 4px;">Mungon / Supozojmë</p><ul class="op-checklist">'+u.missing.map(function(x){ return '<li>'+esc(x)+'</li>'; }).join('')+'</ul>'; }
-        if(u.clarifying&&u.clarifying.length){ html+='<p class="op-subhead" style="margin:12px 0 4px;">Pyetje për t\'u sqaruar</p><ul class="op-checklist">'+u.clarifying.map(function(x){ return '<li>'+esc(x)+'</li>'; }).join('')+'</ul>'; }
+        // u.missing / u.clarifying now feed the answerable "Çfarë mungon" block instead of
+        // being restated here (they were previously shown in four places with overlap).
         if(!html){ block.hidden=true; return; }
         el.innerHTML=html; block.hidden=false;
       }
-      function renderStrengthen(store){
-        var block=$('op-strengthen-block'), el=$('op-out-strengthen'); if(!block||!el) return;
-        var items=[];
-        ((store.strength&&store.strength.missing_evidence)||[]).forEach(function(x){ if(x) items.push(esc(x)); });
-        if(!(store.claim>0)) items.push('Jepni vlerën e kontestit ose dëmit për një vlerësim më të saktë të kostos.');
-        var d=store.doctrine; if(d&&d.kuadri){ d.kuadri.forEach(function(e){ var v=String(e&&e.vleresim||'').toLowerCase(); if(v.indexOf('plot')!==0&&(e&&(e.titull||e.id))) items.push('Forconi elementin «'+esc(e.titull||e.id)+'»'+(e.shenim?(': '+esc(e.shenim)):'')); }); }
-        if(!items.length){ block.hidden=true; el.innerHTML=''; return; }
-        el.innerHTML='<ul class="op-checklist">'+items.slice(0,8).map(function(x){ return '<li>'+x+'</li>'; }).join('')+'</ul>';
+      // ── "Çfarë mungon": one consolidated, answerable gap list ──
+      // Merges the three AI gap sources (previously rendered in FOUR places with overlap)
+      // plus the deterministic ones, de-duplicated fuzzily. Each item gets an input so the
+      // user can answer it and re-run — see refine() below.
+      function collectGaps(store){
+        var det=[], ai=[];
+        function push(arr,kind,q,src){
+          q=String(q==null?'':q).trim(); if(!q||q==='...') return;
+          var all=det.concat(ai);
+          for(var i=0;i<all.length;i++){ if(gapSimilar(all[i].q,q)>=0.6) return; }
+          arr.push({kind:kind,q:q,src:src});
+        }
+        // Deterministic first — one tap each, and the date can flip the whole verdict
+        // (checkLimitation → score cap), so it earns the top slot.
+        if(!store.eventDate) push(det,'date','Kur ndodhi ngjarja ose shkelja? Data përcakton afatin e parashkrimit.','det');
+        if(!(store.claim>0)) push(det,'claim','Sa është vlera e kontestit ose dëmi i pretenduar, në Lekë?','det');
+        var u=store.understanding||{};
+        // clarifying first: it is already question-shaped, so on a near-duplicate collision
+        // the question form survives instead of a flat "X mungon" statement.
+        (u.clarifying||[]).forEach(function(x){ push(ai,'q',x,'clarifying'); });
+        (u.missing||[]).forEach(function(x){ push(ai,'q',x,'missing'); });
+        ((store.strength&&store.strength.missing_evidence)||[]).forEach(function(x){ push(ai,'q',x,'evidence'); });
+        return det.concat(ai.slice(0,6));
+      }
+
+      function renderGaps(store){
+        var block=$('op-gaps-block'), el=$('op-out-gaps'), row=$('op-refine-row');
+        if(!block||!el) return;
+        var gaps=collectGaps(store), advice=[];
+        var d=store.doctrine;
+        if(d&&d.kuadri) d.kuadri.forEach(function(e){
+          var v=String(e&&e.vleresim||'').toLowerCase();
+          if(v.indexOf('plot')!==0&&(e&&(e.titull||e.id)))
+            advice.push('Forconi elementin «'+esc(e.titull||e.id)+'»'+(e.shenim?(': '+esc(e.shenim)):''));
+        });
+        if(!gaps.length&&!advice.length){ block.hidden=true; el.innerHTML=''; if(row) row.hidden=true; return; }
+        var html='';
+        if(gaps.length){
+          html+='<p class="op-gap-intro">Përgjigju pyetjeve më poshtë dhe shtyp «Përditëso analizën» — analiza rikryhet me përgjigjet e tua.</p><ul class="op-gap-list">';
+          gaps.forEach(function(g,i){
+            var id='op-gap-'+i, inp;
+            if(g.kind==='date') inp='<input type="date" id="'+id+'" data-gap="date" max="'+JurDate.todayISO()+'">';
+            else if(g.kind==='claim') inp='<input type="text" inputmode="numeric" autocomplete="off" id="'+id+'" data-gap="claim" placeholder="p.sh. 800000">';
+            else inp='<input type="text" autocomplete="off" id="'+id+'" data-gap="q" data-q="'+esc(g.q)+'" placeholder="Përgjigja juaj (lëre bosh nëse nuk e di)">';
+            html+='<li class="op-gap-item"><label class="op-gap-q" for="'+id+'">'+esc(g.q)+'</label>'+inp+'</li>';
+          });
+          html+='</ul>';
+        }
+        // advice strings are pre-escaped in their parts (same contract the old renderStrengthen used)
+        if(advice.length)
+          html+='<p class="op-subhead op-amber" style="margin:16px 0 4px;">Çfarë do ta forconte çështjen</p><ul class="op-checklist">'+advice.slice(0,4).map(function(x){ return '<li>'+x+'</li>'; }).join('')+'</ul>';
+        el.innerHTML=html;
+        if(row) row.hidden=!gaps.length;
+        var b=$('op-refine-btn'); if(b) b.disabled=true;
         block.hidden=false;
       }
 
@@ -1461,7 +1753,9 @@
       }
 
       var running=false, thinConfirmed=false;
-      var attachedText='', resetPdf=function(){}, lastOpinion='';
+      // lastStore is assigned only at the END of a successful run, so refine() can never
+      // read a half-built store from a run the user restarted mid-flight.
+      var attachedText='', resetPdf=function(){}, lastOpinion='', lastStore=null;
       function showError(msg){ var box=$('opinion-form-error'); box.textContent=msg; box.hidden=false; }
       var lawListText=function(laws){ if(!laws.length) return 'Ligjet zbatuese të të drejtës shqiptare.'; return laws.map(function(l){ return '• '+l.name+' ('+((l.articles||[]).join(', ')||'nenet zbatuese')+'): '+(l.relevance||''); }).join('\n'); };
 
@@ -1474,7 +1768,11 @@
         if(facts && facts.length<120 && !attachedText && !thinConfirmed){ var _tg=$('opinion-thin-gate'); if(_tg){ _tg.hidden=false; return; } }
         thinConfirmed=false; var _tg2=$('opinion-thin-gate'); if(_tg2) _tg2.hidden=true;
         var attach=attachedText?('\n\nDOKUMENT I NGARKUAR (përmbajtje e nxjerrë):\n'+attachedText.slice(0,8000)):'';
-        var ctx='Lloji: çështje '+type+'.\nFaktet: '+(facts||'(shih dokumentin e ngarkuar)')+(parties?'\nPalët: '+parties:'')+(goal?'\nQëllimi: '+goal:'')+attach;
+        // When the user has answered gap questions, those answers are confirmed facts —
+        // every downstream call must treat them as settled and stop re-asking.
+        var refineNote = facts.indexOf(REFINE_MARK)>-1
+          ? '\n\n(Seksioni «'+REFINE_MARK+'» brenda fakteve përmban përgjigje TË KONFIRMUARA nga klienti — trajtoji si fakte të vërtetuara dhe MOS i ripyet.)' : '';
+        var ctx='Lloji: çështje '+type+'.\nFaktet: '+(facts||'(shih dokumentin e ngarkuar)')+(parties?'\nPalët: '+parties:'')+(goal?'\nQëllimi: '+goal:'')+refineNote+attach;
         var isProp=(type==='prone')||((type==='civile'||type==='tregtare')&&detectProperty(facts+' '+parties+' '+goal+' '+attachedText));
         var conceptKey=isProp?'prone':(CONCEPTS[type]?type:'');
         var concept=conceptKey?CONCEPTS[conceptKey]:null;
@@ -1491,7 +1789,9 @@
         store.limitation=checkLimitation(type, store.eventDate);
         rowActive(0);
         var _c1sys='Jeni analist ligjor shqiptar me përvojë. Përgjigjuni VETËM me JSON të vlefshëm, pa tekst para ose pas dhe pa shenja ```.'+ANTI_HALLUC;
-        var _c1usr=ctx+primer+'\n\nIdentifiko 3–5 ligjet shqiptare më relevante dhe nenet kryesore zbatuese (ji gjithëpërfshirës: deri në 8 nene gjithsej, vetëm nene për të cilat je i sigurt). Gjithashtu nxirr një PËRMBLEDHJE të fakteve të kuptuara dhe listo çfarë mungon ose supozohet.\nJSON: {"laws":[{"name":"...","articles":["..."],"relevance":"..."}],"issues":["..."],"arguments":["..."],"facts":{"parties":"...","dates":"...","amounts":"...","claim_type":"...","jurisdiction":"..."},"key_events":["..."],"missing":["..."],"clarifying":["..."]}';
+        var _c1usr=ctx+primer+'\n\nIdentifiko 3–5 ligjet shqiptare më relevante dhe nenet kryesore zbatuese (ji gjithëpërfshirës: deri në 8 nene gjithsej, vetëm nene për të cilat je i sigurt). Gjithashtu nxirr një PËRMBLEDHJE të fakteve të kuptuara dhe listo çfarë mungon ose supozohet.\nJSON: {"laws":[{"name":"...","articles":["..."],"relevance":"..."}],"issues":["..."],"arguments":["..."],"facts":{"parties":"...","dates":"...","amounts":"...","claim_type":"...","jurisdiction":"..."},"key_events":["..."],"missing":["..."],"clarifying":["..."]}'
+          +'\n\nUDHËZIM PËR "clarifying": jep deri në 6 PYETJE TË SHKURTRA, konkrete dhe të përgjigjshme, drejtuar klientit. Secila max 12 fjalë, fillon me "A ", "Kur ", "Sa ", "Kush ", "Ku " ose "Cili/Cila", dhe i përgjigjet me një fjali. SHEMBUJ TË MIRË: "A ekziston kontratë me shkrim?"; "Kur e njoftuat palën tjetër?"; "Sa është vlera e faturës së papaguar?". TË NDALUARA: "Më shumë detaje", "Sqaroni situatën", "Dokumentacion shtesë". Mos pyet për gjëra që tashmë janë në faktet e dhëna dhe mos e përsërit të njëjtën pyetje me fjalë të tjera.'
+          +'\n\nUDHËZIM PËR "missing": deri në 5 fakte thelbësore që MUNGOJNË ose i kemi supozuar, secili një fjali e shkurtër dhe konkrete.';
         Promise.all([0.12,0.25,0.4].map(function(tmp){ return runCall(1,_c1sys,_c1usr,700,tmp).then(function(r){ return safeJson(r); }, function(e){ if(e&&e.name==='AbortError') throw e; return null; }); }))
         .then(function(samples){
           var agg=aggregateLaws(samples); store.laws=agg.laws; store.understanding=agg.understanding;
@@ -1500,7 +1800,8 @@
           store.webgroundP=(typeof aiGroundedSearch==='function') ? aiGroundedSearch(buildWebQuery(store.laws,type,facts), abortCtrl?abortCtrl.signal:undefined).catch(function(e){ if(e&&e.name==='AbortError') throw e; return null; }) : Promise.resolve(null);
           rowDone(0); rowActive(1);
           return runCall(2,'Jeni vlerësues i pavarur ligjor. Përgjigjuni VETËM me JSON të vlefshëm.',
-            ctx+'\n\nBazë ligjore:\n'+store.lawList+'\n\nVlerëso pozicionin ligjor në mënyrë realiste. Për secilin faktor, jep fillimisht një arsye të shkurtër ("why") dhe pastaj notën nga 0 në 2 ("score"; 0=shumë dobët, 1=mesatar, 2=shumë mirë). Kujdes: "kundershtimi" mat sa i FORTË është pozicioni i palës kundërshtare (2 = kundërshtim shumë i fortë kundër klientit). JSON:\n{"factors":{"baza":{"score":1.5,"why":"..."},"prova":{"score":1.0,"why":"..."},"kundershtimi":{"score":1.0,"why":"..."},"faktet":{"score":1.5,"why":"..."}},"strengths":["..."],"weaknesses":["..."],"missing_evidence":["..."]}',650,0.2);
+            ctx+'\n\nBazë ligjore:\n'+store.lawList+'\n\nVlerëso pozicionin ligjor në mënyrë realiste. Për secilin faktor, jep fillimisht një arsye të shkurtër ("why") dhe pastaj notën nga 0 në 2 ("score"; 0=shumë dobët, 1=mesatar, 2=shumë mirë). Kujdes: "kundershtimi" mat sa i FORTË është pozicioni i palës kundërshtare (2 = kundërshtim shumë i fortë kundër klientit). JSON:\n{"factors":{"baza":{"score":1.5,"why":"..."},"prova":{"score":1.0,"why":"..."},"kundershtimi":{"score":1.0,"why":"..."},"faktet":{"score":1.5,"why":"..."}},"strengths":["..."],"weaknesses":["..."],"missing_evidence":["..."]}'
+                  +'\n\nUDHËZIM PËR "missing_evidence": deri në 5 prova KONKRETE që i mungojnë çështjes, secila e formuluar si pyetje e shkurtër drejtuar klientit ("A e keni kontratën e nënshkruar?", "A keni foto ose raport eksperti për dëmin?"), max 12 fjalë. Emërto provën konkrete — dokument, faturë, dëshmitar, foto, raport eksperti, komunikim me shkrim — kurrë "prova shtesë".',650,0.2);
         })
         .then(function(r2){
           store.strength=safeJson(r2); rowDone(1);
@@ -1593,6 +1894,7 @@
             store.webground=wg;
             if(store.logic && !store.corrected && store.opinion.indexOf(store.logic.msg)<0) store.opinion=store.opinion+'\n\n— '+store.logic.msg;
             store.confidence=computeConfidence(store);
+            lastStore=store;   // only now is the store complete enough for refine()
             renderFactSheet(store);
             renderSummary(store);
             renderStrength(store.strength);
@@ -1605,13 +1907,15 @@
             renderForecast(store.forecast);
             renderADR(store);
             renderPlan(store.plan,store.type,store.limitation);
-            renderStrengthen(store);
+            renderGaps(store);
             renderText('op-out-opinion',store.opinion);
             renderVerify(store);
             renderReferences(store);
             applyConfidenceBadges(store);
             // link article/law citations across the structured sections (skip ones that already have links)
-            ['op-out-summary','op-out-factsheet','op-out-analysis','op-out-forecast','op-out-doctrine','op-out-adr','op-out-plan','op-out-strengthen','op-out-verify','op-out-breakdown'].forEach(function(id){ var e=$(id); if(e&&e.innerHTML&&e.innerHTML.indexOf('<a ')<0) e.innerHTML=linkifyHtml(e.innerHTML); });
+            // NOTE: 'op-out-gaps' is deliberately NOT in this list — linkifyHtml round-trips
+            // innerHTML, which does not serialize an <input>'s .value and would wipe answers.
+            ['op-out-summary','op-out-factsheet','op-out-analysis','op-out-forecast','op-out-doctrine','op-out-adr','op-out-plan','op-out-verify','op-out-breakdown'].forEach(function(id){ var e=$(id); if(e&&e.innerHTML&&e.innerHTML.indexOf('<a ')<0) e.innerHTML=linkifyHtml(e.innerHTML); });
             $('opinion-progress').hidden=true;
             $('opinion-output').hidden=false;
             $('opinion-modal-inner').scrollTop=0;
@@ -1636,8 +1940,75 @@
         var _db=$('op-doctrine-block'); if(_db) _db.hidden=true;
         var _do=$('op-out-doctrine'); if(_do) _do.innerHTML='';
         var _sb=$('op-summary-block'); if(_sb) _sb.hidden=true;
-        var _stb=$('op-strengthen-block'); if(_stb) _stb.hidden=true;
+        var _gb=$('op-gaps-block'); if(_gb) _gb.hidden=true;
+        lastStore=null;
       }
+
+      // ── Refine: answer the gaps, re-run with the answers folded into the facts ──
+      // Answers are written into the REAL form fields, so generate() rebuilds ctx from them
+      // with zero extra plumbing. A sentinel block keeps repeated refines idempotent.
+      var REFINE_MARK='=== SQARIME SHTESË NGA KLIENTI ===';
+
+      function parseRefineBlock(txt){
+        var i=String(txt==null?'':txt).indexOf(REFINE_MARK); if(i<0) return [];
+        var out=[], lines=String(txt).slice(i+REFINE_MARK.length).split('\n'), cur=null;
+        lines.forEach(function(ln){
+          var q=/^Pyetje:\s*(.+)$/.exec(ln), a=/^Përgjigje:\s*(.+)$/.exec(ln);
+          if(q){ cur={q:q[1].trim(),a:''}; out.push(cur); }
+          else if(a&&cur) cur.a=a[1].trim();
+        });
+        return out.filter(function(p){ return p.q&&p.a; });
+      }
+
+      // Claim-only changes need ZERO AI calls: the claim never enters a prompt, and the
+      // damages breakdown is returned as percentage shares, so it re-scales locally.
+      function recomputeLocal(){
+        var s=lastStore; if(!s||!s.type) return false;
+        s.claim=parseAmount($('opinion-claim').value)||extractClaimFromFacts($('opinion-facts').value);
+        s.forecast=computeForecast(s.claim,(s.strength&&s.strength.score),s.type);
+        s.forecast.drivers=s.forecastDrivers||[];
+        s.forecast.damages=buildDamages(s.forecastDamages,s.claim,s.type);
+        renderForecast(s.forecast);
+        renderSummary(s);
+        renderGaps(s);
+        var fe=$('op-out-forecast'); if(fe&&fe.innerHTML&&fe.innerHTML.indexOf('<a ')<0) fe.innerHTML=linkifyHtml(fe.innerHTML);
+        return true;
+      }
+
+      function refine(){
+        if(running) return;
+        var el=$('op-out-gaps'); if(!el) return;
+        var pairs=[], claimChanged=false, deepChanged=false;
+        Array.prototype.forEach.call(el.querySelectorAll('input'), function(inp){
+          var v=String(inp.value||'').trim(); if(!v) return;
+          var k=inp.getAttribute('data-gap');
+          if(k==='date'){ $('opinion-event-date').value=v; deepChanged=true; }
+          else if(k==='claim'){ $('opinion-claim').value=v; claimChanged=true; }
+          else { pairs.push({q:inp.getAttribute('data-q')||'(pyetje)',a:v}); deepChanged=true; }
+        });
+        if(!pairs.length&&!claimChanged&&!deepChanged) return;
+        if(pairs.length){
+          var ta=$('opinion-facts');
+          var prev=parseRefineBlock(ta.value), base=String(ta.value||'').split(REFINE_MARK)[0].replace(/\s+$/,'');
+          pairs.forEach(function(p){
+            for(var i=0;i<prev.length;i++){ if(gapSimilar(prev[i].q,p.q)>=0.8){ prev[i].a=p.a; return; } }
+            prev.push(p);
+          });
+          ta.value=base+'\n\n'+REFINE_MARK+'\n'+prev.map(function(p){ return 'Pyetje: '+p.q+'\nPërgjigje: '+p.a; }).join('\n');
+        }
+        if(claimChanged&&!deepChanged&&recomputeLocal()) return;
+        thinConfirmed=true;                 // the narrative was already vetted on the first run
+        $('opinion-output').hidden=true;    // else progress + stale output render together
+        generate();
+      }
+
+      (function(){
+        var el=$('op-out-gaps'), btn=$('op-refine-btn'); if(!el||!btn) return;
+        function anyAnswered(){ var q=el.querySelectorAll('input'); for(var i=0;i<q.length;i++){ if(String(q[i].value||'').trim()) return true; } return false; }
+        el.addEventListener('input', function(){ btn.disabled=!anyAnswered(); });
+        el.addEventListener('keydown', function(e){ if(e.key==='Enter'&&e.target&&e.target.tagName==='INPUT'){ e.preventDefault(); if(!btn.disabled) refine(); } });
+        btn.addEventListener('click', refine);
+      })();
 
       $('opinion-open-btn').addEventListener('click',openModal);
       $('opinion-close').addEventListener('click',closeModal);

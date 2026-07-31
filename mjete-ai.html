@@ -31,6 +31,22 @@
     .op-fc-basis{font-size:.74rem;line-height:1.55;color:var(--muted);margin-top:14px;border-top:1px dashed var(--border);padding-top:10px;}
     .opinion-block-summary{background:#f4f8f7;border-left:3px solid var(--accent);}
     .opinion-block-strengthen{background:#fdfaf3;border-left:3px solid #b8923a;}
+    /* "Çfarë mungon" — answerable gap questions (.opinion-form input is scoped to the form) */
+    .op-gap-intro{font-size:.82rem;line-height:1.6;color:var(--muted);margin:0 0 4px;}
+    .op-gap-list{list-style:none;padding:0;margin:8px 0 0;}
+    .op-gap-item{padding:10px 0 12px;border-bottom:1px dashed var(--border);}
+    .op-gap-item:last-child{border-bottom:none;}
+    .op-gap-q{display:block;font-size:.87rem;line-height:1.5;color:#26241f;margin-bottom:7px;}
+    .op-gap-q::before{content:'?';display:inline-block;width:16px;color:#b8923a;font-weight:700;}
+    .op-gap-item input{font-family:var(--font);font-size:.87rem;color:var(--text);background:#fff;border:1px solid var(--border);border-radius:8px;padding:8px 11px;width:100%;box-sizing:border-box;}
+    .op-gap-item input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(61,112,106,.12);}
+    .op-refine-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:16px;}
+    .op-refine-hint{font-size:.74rem;color:var(--muted);}
+    @media print{
+      .op-gap-item input,.op-refine-row,.op-gap-intro{display:none !important;}
+      .op-gap-q::before{content:'\2610';}
+      .op-gap-item{border-bottom:none;padding:3px 0;}
+    }
     .opinion-form input{font-family:var(--font);font-size:.9rem;color:var(--text);background:#fff;border:1px solid var(--border);border-radius:8px;padding:10px 12px;width:100%;box-sizing:border-box;}
     .opinion-form input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(61,112,106,.12);}
     .inh-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px 14px;}
@@ -444,8 +460,12 @@
       <div class="domain-header"><span class="domain-label">Mëso & Eksploro</span><div class="domain-divider"></div></div>
     <section class="glossary-section">
       <span class="glossary-label">Fjalor Juridik</span>
-      <input id="glossary-search" type="search" placeholder="Kërko term juridik…" autocomplete="off">
+      <input id="glossary-search" type="search" placeholder="Kërko term juridik… (Enter për kërkim me AI)" autocomplete="off">
       <div id="glossary-terms"></div>
+      <div id="glossary-empty" hidden>
+        <p>Asnjë term nuk përputhet me «<span id="gl-q"></span>».</p>
+        <button id="glossary-lookup" type="button">Kërko me AI &#8594;</button>
+      </div>
       <div id="glossary-result" hidden></div>
     </section>
     <section class="compare-section">
@@ -660,6 +680,14 @@
           <div class="opinion-block-label">Përfundimi në një vështrim</div>
           <div id="op-out-summary" class="opinion-section-body"></div>
         </div>
+        <div class="opinion-section-block opinion-block-strengthen" id="op-gaps-block" hidden>
+          <div class="opinion-block-label">Çfarë mungon</div>
+          <div id="op-out-gaps" class="opinion-section-body"></div>
+          <div id="op-refine-row" class="op-refine-row" hidden>
+            <button id="op-refine-btn" class="opinion-generate-btn" type="button" disabled>Përditëso analizën →</button>
+            <span class="op-refine-hint">Rikryen analizën me përgjigjet e tua (~1 minutë).</span>
+          </div>
+        </div>
         <div class="opinion-section-block opinion-block-a">
           <div class="opinion-block-label">Analiza Paraprake</div>
           <div class="opinion-strength-wrap">
@@ -696,10 +724,6 @@
         <div class="opinion-section-block opinion-block-e">
           <div class="opinion-block-label">Plani i Veprimit</div>
           <div id="op-out-plan" class="opinion-section-body"></div>
-        </div>
-        <div class="opinion-section-block opinion-block-strengthen" id="op-strengthen-block" hidden>
-          <div class="opinion-block-label">Çfarë do ta forconte çështjen</div>
-          <div id="op-out-strengthen" class="opinion-section-body"></div>
         </div>
         <div class="opinion-section-block opinion-block-f">
           <div class="opinion-block-label">Mendimi Ligjor</div>

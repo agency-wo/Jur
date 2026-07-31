@@ -633,7 +633,33 @@
     }
     #glossary-search:focus { border-color: var(--text); }
     #glossary-search::placeholder { color: #a09b95; }
-    #glossary-terms { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+    /* block, not flex — the children are now <details> category groups */
+    #glossary-terms { display: block; margin-top: 14px; }
+    .gl-group { border-top: 1px solid var(--border); }
+    .gl-group:first-child { border-top: none; }
+    .gl-group > summary {
+      cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px;
+      padding: 9px 2px; font-size: 0.78rem; font-weight: 600; color: var(--text);
+    }
+    .gl-group > summary::-webkit-details-marker { display: none; }
+    .gl-group > summary::before { content: '\25B8'; color: #b8923a; font-size: 0.7rem; flex-shrink: 0; }
+    .gl-group[open] > summary::before { content: '\25BE'; }
+    .gl-group > summary:hover { color: var(--accent); }
+    .gl-count {
+      margin-left: auto; font-size: 0.66rem; font-weight: 700; letter-spacing: 0.06em;
+      color: var(--muted); background: #f2efe7; border-radius: 4px; padding: 2px 7px;
+    }
+    .gl-terms { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 0 12px 20px; }
+    #glossary-empty { margin-top: 14px; padding: 14px 16px; border: 1px dashed var(--border); border-radius: 8px; background: #fff; }
+    #glossary-empty p { font-size: 0.86rem; color: var(--muted); margin: 0 0 10px; }
+    #glossary-empty p span { color: var(--text); font-weight: 600; }
+    /* base styling for the AI-lookup button (the hover-lift rule below already lists its id) */
+    #glossary-lookup {
+      font-family: var(--font); font-size: 0.82rem; font-weight: 500;
+      padding: 9px 16px; background: var(--text); color: #fff;
+      border: none; border-radius: 8px; cursor: pointer;
+    }
+    @media (max-width: 540px) { .gl-terms { padding-left: 12px; } }
     .gl-term {
       font-family: var(--font); font-size: 0.72rem;
       padding: 5px 12px; border: 1px solid var(--border); border-radius: 999px;
@@ -641,9 +667,10 @@
     }
     .gl-term:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
     .gl-term.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+    /* white-space:normal — definitions now render as HTML via toolMd, not raw text */
     #glossary-result {
       margin-top: 16px; font-size: 0.9rem; line-height: 1.8; color: #111;
-      white-space: pre-wrap; border-top: 1px solid var(--border); padding-top: 14px;
+      border-top: 1px solid var(--border); padding-top: 14px;
     }
 
     /* ── Penalty Estimator ─────────────────────── */

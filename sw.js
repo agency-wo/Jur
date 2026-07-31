@@ -1,5 +1,5 @@
 // Service worker — offline app shell + runtime caching for law pages, data, and fonts.
-// v3 strategy:
+// Strategy:
 //   • Precache: hub pages + all 18 law pages + core JS/CSS; law-article JSON (data/*) is
 //     added at install from the manifest when the build produced it (no guaranteed-404 entry).
 //   • config.js and page navigations: NETWORK-FIRST (fresh content/keys right after a deploy),
@@ -10,7 +10,7 @@
 // Bump VERSION to force a fresh shell + drop old caches on the next visit.
 'use strict';
 
-var VERSION = 'v3';
+var VERSION = 'v4';
 var SHELL = 'shell-' + VERSION;
 var RUNTIME = 'runtime-' + VERSION;
 

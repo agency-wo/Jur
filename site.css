@@ -1248,6 +1248,9 @@
     .op-el-ok{border-left-color:#3d706a;}
     .op-el-part{border-left-color:#b8923a;}
     .op-el-no{border-left-color:#b15c44;}
+    .op-el-na{border-left-color:#8a857c;}
+    /* marks the rows taken from the Penal Code's own KREU/SEKSIONI structure, not from the AI */
+    .op-el-det{font-size:.6rem;font-weight:700;color:#3d706a;border:1px solid #3d706a;border-radius:4px;padding:0 4px;vertical-align:1px;}
     .op-el-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:9px;}
     .op-el-title{font-size:.72rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#26241f;}
     .op-el-badge{font-size:.58rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;border:1px solid;border-radius:999px;padding:2px 9px;white-space:nowrap;}

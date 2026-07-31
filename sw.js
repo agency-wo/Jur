@@ -10,7 +10,7 @@
 // Bump VERSION to force a fresh shell + drop old caches on the next visit.
 'use strict';
 
-var VERSION = 'v4';
+var VERSION = 'v5';
 var SHELL = 'shell-' + VERSION;
 var RUNTIME = 'runtime-' + VERSION;
 

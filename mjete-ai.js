@@ -126,6 +126,133 @@
       }
     };
 
+    // ── KP_OBJEKTI ──────────────────────────────────────────────────────────────────
+    // Canonical "objekt i veprës penale" table, derived from the Penal Code's OWN
+    // KREU/SEKSIONI structure. In Albanian doctrine the objekti is the LEGAL VALUE the
+    // norm protects (vrasje → jeta, vjedhje → pronësia) — never the physical thing the
+    // act fell upon (that is the objekti material). The Code's chapter and section
+    // headings literally name those values, so this is law-derived, not model-guessed.
+    // Headings verified verbatim against the deployed kodi-penal.html.
+
+    // Albanian alphabet, for article suffixes (Neni 170/a … 170/c … 170/ç … 319/dh).
+    var KP_SUF = 'a,b,c,ç,d,dh,e,ë,f,g,gj,h,i,j,k,l,ll,m,n,nj,o,p,q,r,rr,s,sh,t,th,u,v,x,xh,y,z,zh'.split(',');
+    var KP_SUF_IX = {}; (function(){ for(var i=0;i<KP_SUF.length;i++) KP_SUF_IX[KP_SUF[i]] = i+1; })();
+    // "76" → 76 · "84/a" → 84.001 · "170/c" → 170.003 · "170/ç" → 170.004 · "143/a/8" → 143.001
+    // Only the FIRST suffix segment can move a chapter/section boundary, so deeper ones are ignored.
+    function kpKey(num){
+      var s = String(num == null ? '' : num).toLowerCase().replace(/^\s*nen(?:i|it|in|e)?\s+/, '').trim();
+      var m = s.match(/^(\d+)(?:\/([a-zçë]{1,2}|\d{1,2}))?/);
+      if(!m) return NaN;
+      var base = parseInt(m[1],10); if(!isFinite(base)) return NaN;
+      var suf = m[2] || '';
+      var ord = !suf ? 0 : (KP_SUF_IX[suf] || (/^\d+$/.test(suf) ? parseInt(suf,10) : 99));
+      return base + ord/1000;
+    }
+
+    // v = nominative definite ("pronësia"), a = accusative ("pronësinë"). Curated rather than
+    // regex-derived: the headings are "KUNDËR + ablative", the UI needs nominative/accusative,
+    // and 9 of these headings never say "kundër" at all — there the value is a doctrinal
+    // inference, not a substring.
+    var KP_OBJEKTI = {
+      MIN: 73,    // nenet 1–72 = Pjesa e Përgjithshme, nuk përcaktojnë vepër
+      MAX: 333.1, // 334, 334/1, 335 = dispozita kalimtare / hyrje në fuqi
+      kreu: [
+        { from:73,  full:'KRIME KUNDËR NJERËZIMIT', v:'njerëzimi dhe e drejta ndërkombëtare humanitare', a:'njerëzimin' },
+        { from:76,  full:'VEPRA PENALE KUNDËR PERSONIT', v:'personi dhe të drejtat e tij themelore', a:'personin' },
+        { from:134, full:'VEPRA PENALE KUNDËR PASURISË DHE NË SFERËN EKONOMIKE', v:'pasuria dhe marrëdhëniet ekonomike', a:'pasurinë' },
+        { from:201, full:'VEPRA PENALE KUNDËR MJEDISIT', v:'mjedisi', a:'mjedisin' },
+        { from:208, full:'KRIME KUNDËR PAVARËSISË DHE RENDIT KUSHTETUES', v:'pavarësia e shtetit dhe rendi kushtetues', a:'rendin kushtetues' },
+        { from:226, full:'KRIME QË CENOJNË MARRËDHËNIET ME SHTETET E TJERA', v:'marrëdhëniet me shtetet e tjera', a:'marrëdhëniet me shtetet e tjera' },
+        { from:230, full:'VEPRA ME QËLLIME TERRORISTE', v:'siguria publike dhe rendi kushtetues', a:'sigurinë publike' },
+        { from:235, full:'KRIME KUNDËR AUTORITETIT TË SHTETIT', v:'autoriteti i shtetit', a:'autoritetin e shtetit' },
+        { from:300, full:'VEPRA PENALE KUNDËR DREJTËSISË', v:'drejtësia dhe veprimtaria normale e gjykimit', a:'drejtësinë' },
+        { from:325, full:'VEPRA PENALE QË PREKIN ZGJEDHJET E LIRA DHE SISTEMIN DEMOKRATIK TË ZGJEDHJEVE', v:'zgjedhjet e lira dhe sistemi demokratik i zgjedhjeve', a:'zgjedhjet e lira' },
+        { from:333, full:'VEPRA PENALE TË KRYERA NGA BANDA E ARMATOSUR DHE ORGANIZATA KRIMINALE', v:'rendi dhe siguria publike', a:'rendin dhe sigurinë publike' }
+      ],
+      seksioni: [
+        { from:76,    full:'KRIME KUNDËR JETËS TË KRYERA ME DASHJE', v:'jeta e njeriut', a:'jetën' },
+        { from:85,    full:'KRIME KUNDËR JETËS SHKAKTUAR ME PAKUJDESI', v:'jeta e njeriut', a:'jetën' },
+        { from:86,    full:'VEPRAT PENALE TË KRYERA ME DASHJE KUNDËR SHËNDETIT', v:'shëndeti dhe integriteti trupor', a:'shëndetin' },
+        { from:91,    full:'VEPRA PENALE KUNDËR SHËNDETIT TË KRYERA NGA PAKUJDESIA', v:'shëndeti dhe integriteti trupor', a:'shëndetin' },
+        { from:93,    full:'VEPRA PENALE QË RREZIKOJNË JETËN DHE SHËNDETIN NGA NDËRPRERJA E SHTATZËNISË OSE MOSDHËNIA E NDIHMËS', v:'jeta dhe shëndeti', a:'jetën dhe shëndetin' },
+        { from:100,   full:'KRIME SEKSUALE', v:'liria dhe integriteti seksual', a:'lirinë seksuale' },
+        { from:109,   full:'VEPRA PENALE KUNDËR LIRISË SË PERSONIT', v:'liria e personit', a:'lirinë e personit' },
+        { from:113,   full:'VEPRA PENALE KUNDËR MORALIT DHE DINJITETIT', v:'morali publik dhe dinjiteti i personit', a:'dinjitetin' },
+        { from:124,   full:'VEPRA PENALE KUNDËR FËMIJËVE, MARTESËS DHE FAMILJES', v:'fëmijët, martesa dhe familja', a:'familjen' },
+        { from:134,   full:'VJEDHJA E PASURISË', v:'pronësia dhe posedimi mbi pasurinë', a:'pronësinë' },
+        { from:143,   full:'MASHTRIMET', v:'pasuria dhe besueshmëria në qarkullimin pasuror', a:'pasurinë' },
+        { from:150,   full:'SHKATËRRIMI I PRONËS', v:'pronësia dhe paprekshmëria e saj', a:'pronësinë' },
+        { from:163,   full:'VEPRA PENALE TË KRYERA NË SHOQËRITË TREGTARE', v:'rregullsia e veprimtarisë së shoqërive tregtare', a:'veprimtarinë e shoqërive tregtare' },
+        { from:170.003, full:'VEPRA PENALE NË LIDHJE ME USHTRIMIN E VEPRIMTARIVE BANKARE DHE FINANCIARE', v:'rregullsia e veprimtarisë bankare dhe financiare', a:'sistemin bankar e financiar' },
+        { from:171,   full:'KRIME NË FUSHËN E DOGANAVE', v:'regjimi doganor dhe të ardhurat e shtetit', a:'regjimin doganor' },
+        { from:180,   full:'VEPRAT PENALE NË LIDHJE ME TAKSAT DHE TATIMET', v:'sistemi fiskal dhe të ardhurat e shtetit', a:'sistemin fiskal' },
+        { from:183,   full:'FALSIFIKIMI I MONEDHAVE DHE LETRAVE ME VLERË', v:'besueshmëria e monedhës dhe e letrave me vlerë', a:'besueshmërinë e monedhës' },
+        { from:186,   full:'FALSIFIKIMI I DOKUMENTEVE', v:'besueshmëria e dokumenteve dhe siguria e qarkullimit juridik', a:'besueshmërinë e dokumenteve' },
+        { from:193,   full:'VEPRA PENALE NË FUSHËN E FALIMENTIMIT', v:'interesat e kreditorëve në procedurën e falimentimit', a:'interesat e kreditorëve' },
+        { from:197,   full:'ZHVILLIMI I PALEJUAR I LOJËRAVE TË FATIT', v:'rendi publik në veprimtarinë e lojërave të fatit', a:'rendin publik' },
+        { from:199,   full:'VEPRA PENALE QË CENOJNË REGJIMIN JURIDIK TË TOKËS DHE TË NDËRTIMEVE', v:'regjimi juridik i tokës dhe i ndërtimeve', a:'regjimin juridik të tokës' },
+        { from:208,   full:'KRIME KUNDËR PAVARËSISË DHE INTEGRITETIT', v:'pavarësia dhe integriteti territorial i shtetit', a:'pavarësinë e shtetit' },
+        { from:219,   full:'KRIME KUNDËR RENDIT KUSHTETUES', v:'rendi kushtetues', a:'rendin kushtetues' },
+        { from:235,   full:'VEPRA PENALE KUNDËR VEPRIMTARISË SHTETËRORE TË KRYERA NGA SHTETASIT', v:'veprimtaria normale shtetërore', a:'veprimtarinë shtetërore' },
+        { from:248,   full:'VEPRA PENALE KUNDËR VEPRIMTARISË SHTETËRORE TË KRYERA NGA PUNONJËSIT SHTETËRORË OSE NË SHËRBIM PUBLIK', v:'veprimtaria e rregullt e administratës publike', a:'administratën publike' },
+        { from:261,   full:'VEPRA PENALE KUNDËR RENDIT DHE SIGURISË PUBLIKE', v:'rendi dhe siguria publike', a:'rendin dhe sigurinë publike' },
+        { from:294,   full:'VEPRA PENALE KUNDËR SEKRETIT DHE KUFIJVE SHTETËRORË', v:'sekreti shtetëror dhe paprekshmëria e kufijve', a:'sekretin shtetëror dhe kufijtë' }
+      ]
+    };
+
+    // Neni → vlera juridike e mbrojtur. Returns null outside the Pjesa e Posaçme.
+    function kpObjekti(num){
+      var k = kpKey(num);
+      if(!isFinite(k) || k < KP_OBJEKTI.MIN || k > KP_OBJEKTI.MAX) return null;
+      function pick(rows){ var hit=null; for(var i=0;i<rows.length;i++){ if(rows[i].from<=k) hit=rows[i]; else break; } return hit; }
+      var g = pick(KP_OBJEKTI.kreu); if(!g) return null;
+      var s = pick(KP_OBJEKTI.seksioni);
+      // A section only applies inside its own chapter (chapters IV, VI, VII, IX, X, XI have none).
+      if(s && s.from < g.from) s = null;
+      return {
+        grupor: g.v, grupor_a: g.a, grupor_full: g.full, grupor_neni: kpNeniLabel(g.from),
+        drejtperdrejte: s ? s.v : g.v, drejtperdrejte_a: s ? s.a : g.a,
+        specifik_full: s ? s.full : '', specifik_neni: s ? kpNeniLabel(s.from) : ''
+      };
+    }
+    // 170.003 → "170/c"
+    function kpNeniLabel(k){
+      var base = Math.floor(k + 1e-9), ord = Math.round((k - base) * 1000);
+      return ord ? (base + '/' + (KP_SUF[ord-1] || ord)) : String(base);
+    }
+
+    // Pick the protected value for a whole case from the penal articles the model identified.
+    // The section cited by the MOST articles wins (ties keep the first); other distinct sections
+    // surface as "objekte të tjera të cenuara" (konkurrim veprash).
+    function kpObjektiForCase(laws, hrefFor){
+      var nums = [], seen = {};
+      (laws||[]).forEach(function(l){
+        var nm = String((l&&l.name)||'').trim(); if(!nm) return;
+        if(hrefFor(nm) !== 'kodi-penal.html') return;          // never map KPP/KC numbers
+        ((l&&l.articles)||[]).forEach(function(a){
+          var m = String(a).match(/\d+(?:\/(?:[a-zçëA-ZÇË]{1,2}|\d{1,2}))*/);
+          if(!m || seen[m[0]]) return; seen[m[0]] = 1; nums.push(m[0]);
+        });
+      });
+      var groups = [], byKey = {};
+      nums.forEach(function(n){
+        var o = kpObjekti(n); if(!o) return;
+        var key = o.specifik_full || o.grupor_full;
+        if(!byKey[key]){ byKey[key] = {o:o, n:0, nums:[]}; groups.push(byKey[key]); }
+        byKey[key].n++; byKey[key].nums.push(n);
+      });
+      if(!groups.length) return null;
+      var best = groups[0];
+      groups.forEach(function(g){ if(g.n > best.n) best = g; });   // strict > keeps first on tie
+      return {
+        o: best.o, nums: best.nums,
+        others: groups.filter(function(g){ return g !== best; })
+                      .map(function(g){ return {v:g.o.drejtperdrejte, nums:g.nums}; }),
+        skipped: nums.filter(function(n){ return !kpObjekti(n); })
+      };
+    }
+    // ── end KP_OBJEKTI ──────────────────────────────────────────────────────────────
+
     // ── GROQ API ── key loaded from config.js ─────
 
     var aiQuestion = document.getElementById('ai-question');
@@ -933,8 +1060,8 @@
           .catch(function(e){ if(e&&e.name==='AbortError') throw e; return {}; })
           .then(function(d){ _lawCache[htmlFile]=d||{}; return _lawCache[htmlFile]; });
       }
-      function artKey(s){ var m=String(s).match(/\d+(?:\/[\w]+)?/); return m?m[0]:''; }
-      function artAnchor(num){ return 'neni-'+String(num).replace('/','-'); }
+      function artKey(s){ var m=String(s).match(/\d+(?:\/(?:[a-zçëA-ZÇË]{1,2}|\d{1,2}))*/); return m?m[0]:''; }
+      function artAnchor(num){ return 'neni-'+String(num).replace(/\//g,'-'); }
       function lawHrefFor(name){
         if(LAW_MAP[name]) return LAW_MAP[name];
         for(var i=0;i<LAW_NAMES_SORTED.length;i++){
@@ -960,12 +1087,18 @@
               var key=name+'|'+num;
               if(seen[key]) return;
               seen[key]=true;
-              var text=row.data[num];
+              var text=row.data[num], useNum=num;
+              // Models often cite "neni 76/2" meaning paragraph 2 of neni 76 — fall back to the
+              // base article before declaring the citation unsourced.
+              if(!text && num.indexOf('/')>-1){
+                var baseNum=num.split('/')[0];
+                if(row.data[baseNum]){ text=row.data[baseNum]; useNum=baseNum; }
+              }
               if(text){
                 var clean=String(text).replace(/\s+/g,' ').trim();
-                found.push({law:name,num:num,href:row.href,anchor:'neni-'+String(num).replace('/','-'),text:clean});
-                nums[num.split('/')[0]]=true;
-                blocks.push('Neni '+num+' ('+name+'): «'+clean.slice(0,1200)+'»');
+                found.push({law:name,num:useNum,href:row.href,anchor:artAnchor(useNum),text:clean});
+                nums[useNum.split('/')[0]]=true;
+                blocks.push('Neni '+useNum+' ('+name+'): «'+clean.slice(0,1200)+'»');
               } else {
                 missing.push({law:name,num:num});
               }
@@ -983,7 +1116,7 @@
               var t=li.data[rn]; if(!t) continue;
               seen[key]=true;
               var clean=String(t).replace(/\s+/g,' ').trim();
-              found.push({law:f.law,num:rn,href:li.href,anchor:'neni-'+String(rn).replace('/','-'),text:clean,xref:true});
+              found.push({law:f.law,num:rn,href:li.href,anchor:artAnchor(rn),text:clean,xref:true});
               nums[rn.split('/')[0]]=true;
               blocks.push('Neni '+rn+' ('+f.law+', referuar brenda tekstit): «'+clean.slice(0,900)+'»');
               extra++;
@@ -1010,13 +1143,45 @@
         {w:'divorc',s:3},{w:'kujdestar',s:3},{w:'birësim',s:3},{w:'detyrim ushqimor',s:3},
         {w:'martes',s:2},{w:'fëmij',s:2},{w:'pasuri',s:2},{w:'atësi',s:2},{w:'ushqim',s:1}
       ];
+      var PENAL_PRIMER = '\n\nUDHËZIM (e drejta penale — përbërja e veprës penale): Analiza penale ndërtohet mbi katër elementët e përbërjes. (1) OBJEKTI — vlera juridike, pra marrëdhënia shoqërore që mbron norma penale dhe që cenohet ose vihet në rrezik nga vepra (te vrasja: jeta; te plagosja: shëndeti; te vjedhja: pronësia). Objekti NUK është sendi ose trupi mbi të cilin ra veprimi — ai quhet «objekti material» — dhe as i dëmtuari, i cili quhet «subjekti pasiv». (2) ANA OBJEKTIVE — veprimi ose mosveprimi, pasoja, lidhja shkakësore (neni 13) dhe rrethanat e kohës, vendit e mjetit. (3) SUBJEKTI — personi që ka mbushur moshën e përgjegjësisë penale (neni 12) dhe është i përgjegjshëm (neni 17), si dhe cilësitë e veçanta kur i kërkon norma. (4) ANA SUBJEKTIVE — faji (neni 14) në formën e dashjes (neni 15) ose të pakujdesisë (neni 16), si dhe motivi e qëllimi. Merr parasysh edhe stadin e veprës (tentativa dhe heqja dorë, nenet 22–24), bashkëpunimin (nenet 25–28) dhe rrethanat lehtësuese e rënduese (nenet 47–50). Identifiko dhe cito nenet përkatëse të Kodit Penal sipas tekstit zyrtar të dhënë.';
+      var PENAL_KEYWORDS = [
+        {w:'përgjegjësi penale',s:3},{w:'papërgjegjshm',s:3},{w:'lidhja shkakësore',s:3},
+        {w:'me dashje',s:3},{w:'nga pakujdesia',s:3},{w:'tentativ',s:3},{w:'bashkëpunim',s:3},
+        {w:'rrethanat lehtësuese',s:3},{w:'rrethanat rënduese',s:3},
+        {w:'faji',s:2},{w:'i mitur',s:2},{w:'vepër penale',s:1},{w:'dënohet',s:1}
+      ];
+      // Every përbërja analysis needs these general-part rules regardless of the offence, and
+      // keyword scoring cannot retrieve a specific article reliably — so they are PINNED.
+      // Verified against data/kodi-penal.json: 12 mosha · 13 lidhja shkakësore · 14 faji ·
+      // 15 dashja · 16 pakujdesia · 17 papërgjegjshmëria · 22–24 tentativa/heqja dorë ·
+      // 25–27 bashkëpunimi · 47 caktimi i dënimit · 48 & 50 rrethanat.
+      var PENAL_PIN = [12,13,14,15,16,17,22,23,24,25,26,27,47,48,50];
       // Concept library: case types whose governing law IS in the corpus get proactive grounding.
       var CONCEPTS = {
         prone:     {primer:PROPERTY_PRIMER, href:'kodi-civil.html',    name:'Kodi Civil',      kw:PROPERTY_KEYWORDS, limit:6},
-        familjare: {primer:FAMILY_PRIMER,   href:'kodi-familjes.html', name:'Kodi i Familjes', kw:FAMILY_KEYWORDS,   limit:6}
+        familjare: {primer:FAMILY_PRIMER,   href:'kodi-familjes.html', name:'Kodi i Familjes', kw:FAMILY_KEYWORDS,   limit:6},
+        penale:    {primer:PENAL_PRIMER,    href:'kodi-penal.html',    name:'Kodi Penal',      kw:PENAL_KEYWORDS,    limit:5, min:6, pin:PENAL_PIN, pinCap:520}
       };
+      // Always-on grounding for a fixed list of article numbers. Marked pinned:true so the
+      // strength score does NOT read them as "the model found real law" (computeStrengthScore).
+      function pinGround(href, lawName, nums, cap){
+        if(!nums||!nums.length) return Promise.resolve({found:[]});
+        cap=cap||520;
+        return fetchLawData(href).then(function(data){
+          if(!data) return {found:[]};
+          var found=[];
+          nums.forEach(function(n){
+            var t=data[String(n)]; if(!t) return;
+            var clean=String(t).replace(/\s+/g,' ').trim();
+            found.push({law:lawName,num:String(n),href:href,anchor:artAnchor(n),
+                        text:(clean.length>cap?clean.slice(0,cap)+'…':clean),pinned:true});
+          });
+          return {found:found};
+        }).catch(function(e){ if(e&&e.name==='AbortError') throw e; return {found:[]}; });
+      }
       // Scan a law's article JSON and return the top-scoring articles by keyword weight.
-      function keywordGround(href, lawName, kw, limit){
+      function keywordGround(href, lawName, kw, limit, minScore){
+        var MIN=minScore||4;   // penal keywords are generic, so that concept raises the bar
         return fetchLawData(href).then(function(data){
           if(!data) return {found:[]};
           var scored=[];
@@ -1025,11 +1190,11 @@
             if(!t) return;
             var score=0;
             kw.forEach(function(o){ if(t.indexOf(o.w)!==-1) score+=o.s; });
-            if(score>=4) scored.push({num:num,score:score,text:String(data[num]).replace(/\s+/g,' ').trim()});
+            if(score>=MIN) scored.push({num:num,score:score,text:String(data[num]).replace(/\s+/g,' ').trim()});
           });
           scored.sort(function(a,b){ return b.score-a.score; });
           var found=scored.slice(0,limit).map(function(x){
-            return {law:lawName,num:x.num,href:href,anchor:'neni-'+String(x.num).replace('/','-'),text:x.text};
+            return {law:lawName,num:x.num,href:href,anchor:artAnchor(x.num),text:x.text};
           });
           return {found:found};
         }).catch(function(e){ if(e&&e.name==='AbortError') throw e; return {found:[]}; });
@@ -1079,7 +1244,7 @@
             var q=vecs[0];
             cands.forEach(function(c,i){ c.sim=_cosine(q,vecs[i+1]); });
             cands.sort(function(a,b){ return b.sim-a.sim; });
-            return {found: cands.slice(0,6).map(function(c){ return {law:c.law,num:c.num,href:c.href,anchor:'neni-'+String(c.num).replace('/','-'),text:c.text}; })};
+            return {found: cands.slice(0,6).map(function(c){ return {law:c.law,num:c.num,href:c.href,anchor:artAnchor(c.num),text:c.text}; })};
           });
         }).catch(function(){ return null; });
       }
@@ -1087,57 +1252,140 @@
       function doctrineSpec(type){
         if(type==='penale'){
           return {
-            sys:'Jeni profesor i së drejtës penale shqiptare. Analizoni përbërjen e veprës penale sipas teorisë klasike me katër elementë (objekti, ana objektive, subjekti, ana subjektive). Përgjigjuni VETËM me JSON të vlefshëm, pa tekst para ose pas. Mbështetuni te teksti zyrtar i neneve të dhëna; mos shpikni numra nenesh apo emra veprash penale.',
-            tmpl:'{"framework":"penale","vepra":"emri i mundshëm i veprës penale","kuadri":[{"id":"objekti","titull":"Objekti i veprës penale","permbajtja":[{"etikete":"I përgjithshëm","vlera":"..."},{"etikete":"Specifik / i drejtpërdrejtë","vlera":"..."},{"etikete":"Objekti material / subjekti pasiv","vlera":"..."}],"vleresim":"plotesuar|pjeserisht|munget","shenim":"çfarë e provon ose çfarë mungon"},{"id":"ana_objektive","titull":"Ana objektive","permbajtja":[{"etikete":"Veprimi / mosveprimi","vlera":"..."},{"etikete":"Pasoja","vlera":"..."},{"etikete":"Lidhja shkakësore","vlera":"..."},{"etikete":"Rrethanat (kohë/vend/mjet)","vlera":"..."}],"vleresim":"plotesuar|pjeserisht|munget","shenim":"..."},{"id":"subjekti","titull":"Subjekti i veprës penale","permbajtja":[{"etikete":"Lloji i subjektit","vlera":"..."},{"etikete":"Përgjegjshmëria","vlera":"..."},{"etikete":"Mosha","vlera":"..."},{"etikete":"Cilësi të veçanta","vlera":"..."}],"vleresim":"plotesuar|pjeserisht|munget","shenim":"..."},{"id":"ana_subjektive","titull":"Ana subjektive","permbajtja":[{"etikete":"Forma e fajit","vlera":"dashje e drejtpërdrejtë/e tërthortë ose pakujdesi (me vetëbesim/nga shkujdesja)"},{"etikete":"Motivi","vlera":"..."},{"etikete":"Qëllimi","vlera":"..."}],"vleresim":"plotesuar|pjeserisht|munget","shenim":"..."}],"kualifikimi":{"neni":"neni/paragrafi i mundshëm","forma":"bazë / e kualifikuar / e privilegjuar","stadi":"përgatitje / tentativë / e konsumuar","bashkepunimi":"nëse ka: organizator/ekzekutor/shtytës/ndihmës"},"rrethanat":{"lehtesuese":["..."],"renduese":["..."]},"dallimi":"dallimi nga vepra penale të ngjashme","perfundim":"a përmbushet përbërja e veprës penale dhe ku qëndron pika kyçe"}'
+            sys:'Jeni profesor i së drejtës penale shqiptare. Analizoni përbërjen e veprës penale sipas teorisë klasike me katër elementë: OBJEKTI, ANA OBJEKTIVE, SUBJEKTI, ANA SUBJEKTIVE.\n'
+              + 'PËRKUFIZIM I DETYRUESHËM — OBJEKTI: objekti i veprës penale është VLERA JURIDIKE, pra marrëdhënia shoqërore që mbron norma penale dhe që cenohet ose vihet në rrezik nga vepra. Ai ka tri shkallë: i përgjithshëm (tërësia e marrëdhënieve shoqërore të mbrojtura nga ligji penal), grupor (vlera që mbron kreu përkatës i Pjesës së Posaçme) dhe i drejtpërdrejtë (vlera që mbron seksioni ose neni konkret).\n'
+              + 'SHEMBUJ TË SAKTË: vrasja me dashje (neni 76) → objekti është JETA e njeriut, jo trupi i viktimës; plagosja me dashje (nenet 88–89) → SHËNDETI dhe integriteti trupor; vjedhja (neni 134) → PRONËSIA dhe posedimi mbi pasurinë, jo sendi i vjedhur; mashtrimi (neni 143) → pasuria dhe besueshmëria në qarkullimin pasuror; falsifikimi i dokumenteve (neni 186) → besueshmëria e dokumenteve dhe siguria e qarkullimit juridik.\n'
+              + 'PARALAJMËRIM: OBJEKTI MATERIAL (sendi, paraja, dokumenti ose trupi i njeriut mbi të cilin bie veprimi) dhe SUBJEKTI PASIV (i dëmtuari) NUK janë objekti i veprës penale. Mos i vendos në vend të vlerës juridike të mbrojtur — jepi si zëra të veçantë, siç kërkohet nga struktura JSON.\n'
+              + 'Përgjigjuni VETËM me JSON të vlefshëm, pa tekst para ose pas. Mbështetuni te teksti zyrtar i neneve të dhëna; mos shpikni numra nenesh apo emra veprash penale.',
+            tmpl:'{"framework":"penale","vepra":"emri i mundshëm i veprës penale","kuadri":[{"id":"objekti","titull":"Objekti i veprës penale","permbajtja":[{"etikete":"Objekti grupor","vlera":"vlera juridike që mbron kreu përkatës i Pjesës së Posaçme"},{"etikete":"Objekti i drejtpërdrejtë","vlera":"vlera konkrete juridike që cenon kjo vepër — p.sh. jeta, shëndeti, liria e personit, pronësia"},{"etikete":"Si u cenua në këtë rast","vlera":"si u dëmtua ose u vu në rrezik konkretisht kjo vlerë nga sjellja e përshkruar"},{"etikete":"Objekti material","vlera":"sendi, paraja, dokumenti ose trupi mbi të cilin ra veprimi — ky NUK është objekti i veprës penale"},{"etikete":"Subjekti pasiv (i dëmtuari)","vlera":"personi fizik ose juridik bartës i vlerës së cenuar"}],"vleresim":"plotesuar|pjeserisht|mungon","shenim":"çfarë e provon cenimin e kësaj vlere ose çfarë mungon"},{"id":"ana_objektive","titull":"Ana objektive","permbajtja":[{"etikete":"Veprimi / mosveprimi","vlera":"..."},{"etikete":"Pasoja","vlera":"..."},{"etikete":"Lidhja shkakësore","vlera":"..."},{"etikete":"Rrethanat (kohë/vend/mjet)","vlera":"..."}],"vleresim":"plotesuar|pjeserisht|mungon","shenim":"..."},{"id":"subjekti","titull":"Subjekti i veprës penale","permbajtja":[{"etikete":"Lloji i subjektit","vlera":"..."},{"etikete":"Përgjegjshmëria","vlera":"..."},{"etikete":"Mosha","vlera":"..."},{"etikete":"Cilësi të veçanta","vlera":"..."}],"vleresim":"plotesuar|pjeserisht|mungon","shenim":"..."},{"id":"ana_subjektive","titull":"Ana subjektive","permbajtja":[{"etikete":"Forma e fajit","vlera":"dashje e drejtpërdrejtë/e tërthortë ose pakujdesi (me vetëbesim/nga shkujdesja)"},{"etikete":"Motivi","vlera":"..."},{"etikete":"Qëllimi","vlera":"..."}],"vleresim":"plotesuar|pjeserisht|mungon","shenim":"..."}],"kualifikimi":{"neni":"neni/paragrafi i mundshëm","forma":"bazë / e kualifikuar / e privilegjuar","stadi":"përgatitje / tentativë / e konsumuar","bashkepunimi":"nëse ka: organizator/ekzekutor/shtytës/ndihmës"},"rrethanat":{"lehtesuese":["..."],"renduese":["..."]},"dallimi":"dallimi nga vepra penale të ngjashme","perfundim":"a përmbushet përbërja e veprës penale dhe ku qëndron pika kyçe"}'
           };
         }
         if(type==='prone'){
           return {
             sys:'Jeni profesor i së drejtës civile shqiptare, i specializuar në të drejtat reale dhe mbrojtjen e pronësisë. Analizoni çështjen sipas padive reale (padia rivendikuese, padia mohuese, padia pohuese e pronësisë), jo sipas përgjegjësisë për dëmin. Përgjigjuni VETËM me JSON të vlefshëm, pa tekst para ose pas. Mbështetuni te teksti zyrtar i neneve të dhëna; mos shpikni numra nenesh.',
-            tmpl:'{"framework":"prone","vepra":"lloji i padisë reale dhe e drejta që mbrohet","kuadri":[{"id":"titulli","titull":"E drejta reale e paditësit (titulli)","permbajtja":[{"etikete":"Lloji i së drejtës","vlera":"pronësi / posedim / e drejtë tjetër reale"},{"etikete":"Prova e titullit","vlera":"..."}],"vleresim":"plotesuar|pjeserisht|munget","shenim":"çfarë e provon ose çfarë mungon"},{"id":"cenimi","titull":"Cenimi ose privimi","permbajtja":[{"etikete":"Natyra","vlera":"privim posedimi (→ rivendikuese) ose shqetësim pa privim (→ mohuese)"},{"etikete":"Vazhdimësia / rreziku","vlera":"..."}],"vleresim":"plotesuar|pjeserisht|munget","shenim":"..."},{"id":"paligjshmeria","titull":"Paligjshmëria e veprimit të të paditurit","permbajtja":[{"etikete":"Mungesa e titullit/të drejtës së tij","vlera":"..."},{"etikete":"Mbrojtje të mundshme të të paditurit","vlera":"..."}],"vleresim":"plotesuar|pjeserisht|munget","shenim":"..."},{"id":"mbrojtja","titull":"Kërkimi / mbrojtja juridike","permbajtja":[{"etikete":"Çfarë kërkohet","vlera":"kthim sendi / pushim cenimi / njohje pronësie"},{"etikete":"Baza ligjore","vlera":"..."}],"vleresim":"plotesuar|pjeserisht|munget","shenim":"..."}],"kualifikimi":{"lloji_padise":"rivendikuese / mohuese / pohuese","parashkrimi":"padia rivendikuese si rregull nuk parashkruhet; për të tjerat sipas rastit"},"rrethanat":{"lehtesuese":["..."],"renduese":["..."]},"dallimi":"dallimi mes padisë rivendikuese, mohuese dhe asaj të posedimit","perfundim":"a përmbushen elementet, lloji i padisë së përshtatshme dhe pika kyçe"}'
+            tmpl:'{"framework":"prone","vepra":"lloji i padisë reale dhe e drejta që mbrohet","kuadri":[{"id":"titulli","titull":"E drejta reale e paditësit (titulli)","permbajtja":[{"etikete":"Lloji i së drejtës","vlera":"pronësi / posedim / e drejtë tjetër reale"},{"etikete":"Prova e titullit","vlera":"..."}],"vleresim":"plotesuar|pjeserisht|mungon","shenim":"çfarë e provon ose çfarë mungon"},{"id":"cenimi","titull":"Cenimi ose privimi","permbajtja":[{"etikete":"Natyra","vlera":"privim posedimi (→ rivendikuese) ose shqetësim pa privim (→ mohuese)"},{"etikete":"Vazhdimësia / rreziku","vlera":"..."}],"vleresim":"plotesuar|pjeserisht|mungon","shenim":"..."},{"id":"paligjshmeria","titull":"Paligjshmëria e veprimit të të paditurit","permbajtja":[{"etikete":"Mungesa e titullit/të drejtës së tij","vlera":"..."},{"etikete":"Mbrojtje të mundshme të të paditurit","vlera":"..."}],"vleresim":"plotesuar|pjeserisht|mungon","shenim":"..."},{"id":"mbrojtja","titull":"Kërkimi / mbrojtja juridike","permbajtja":[{"etikete":"Çfarë kërkohet","vlera":"kthim sendi / pushim cenimi / njohje pronësie"},{"etikete":"Baza ligjore","vlera":"..."}],"vleresim":"plotesuar|pjeserisht|mungon","shenim":"..."}],"kualifikimi":{"lloji_padise":"rivendikuese / mohuese / pohuese","parashkrimi":"padia rivendikuese si rregull nuk parashkruhet; për të tjerat sipas rastit"},"rrethanat":{"lehtesuese":["..."],"renduese":["..."]},"dallimi":"dallimi mes padisë rivendikuese, mohuese dhe asaj të posedimit","perfundim":"a përmbushen elementet, lloji i padisë së përshtatshme dhe pika kyçe"}'
           };
         }
         if(type==='familjare'){
           return {
             sys:'Jeni profesor i së drejtës familjare shqiptare. Analizoni çështjen sipas Kodit të Familjes (zgjidhja e martesës, kujdestaria dhe interesi më i lartë i fëmijës, pjesëtimi i pasurisë bashkëshortore, detyrimi ushqimor, atësia/birësimi). Përgjigjuni VETËM me JSON të vlefshëm, pa tekst para ose pas. Mbështetuni te teksti zyrtar i neneve të dhëna; mos shpikni numra.',
-            tmpl:'{"framework":"familjare","vepra":"natyra e çështjes familjare","kuadri":[{"id":"marredhenia","titull":"Marrëdhënia familjare & legjitimimi","permbajtja":[{"etikete":"Lidhja (martesë/farefisni)","vlera":"..."},{"etikete":"Palët & legjitimimi","vlera":"..."}],"vleresim":"plotesuar|pjeserisht|munget","shenim":"çfarë e provon ose çfarë mungon"},{"id":"baza","titull":"Baza ligjore e kërkesës","permbajtja":[{"etikete":"Shkaqet/kushtet","vlera":"shkaqet e divorcit ose kushtet e kujdestarisë/ushqimores"}],"vleresim":"plotesuar|pjeserisht|munget","shenim":"..."},{"id":"femija","titull":"Interesi më i lartë i fëmijës","permbajtja":[{"etikete":"Kujdestaria/takimet","vlera":"..."},{"etikete":"Faktorët e vlerësimit","vlera":"..."}],"vleresim":"plotesuar|pjeserisht|munget","shenim":"nëse nuk ka fëmijë, shëno se nuk zbatohet"},{"id":"pasoja","titull":"Pasojat pasurore & detyrimi ushqimor","permbajtja":[{"etikete":"Pjesëtimi i pasurisë","vlera":"..."},{"etikete":"Detyrimi ushqimor","vlera":"..."}],"vleresim":"plotesuar|pjeserisht|munget","shenim":"..."}],"kualifikimi":{"lloji_ceshtjes":"divorc / kujdestari / ushqimore / birësim / atësi","afatet":"afate të mundshme"},"rrethanat":{"lehtesuese":["..."],"renduese":["..."]},"dallimi":"dallimi nga procedura të ngjashme familjare","perfundim":"a përmbushen kushtet dhe pika kyçe për interesin e fëmijës dhe palëve"}'
+            tmpl:'{"framework":"familjare","vepra":"natyra e çështjes familjare","kuadri":[{"id":"marredhenia","titull":"Marrëdhënia familjare & legjitimimi","permbajtja":[{"etikete":"Lidhja (martesë/farefisni)","vlera":"..."},{"etikete":"Palët & legjitimimi","vlera":"..."}],"vleresim":"plotesuar|pjeserisht|mungon","shenim":"çfarë e provon ose çfarë mungon"},{"id":"baza","titull":"Baza ligjore e kërkesës","permbajtja":[{"etikete":"Shkaqet/kushtet","vlera":"shkaqet e divorcit ose kushtet e kujdestarisë/ushqimores"}],"vleresim":"plotesuar|pjeserisht|mungon","shenim":"..."},{"id":"femija","titull":"Interesi më i lartë i fëmijës","permbajtja":[{"etikete":"Kujdestaria/takimet","vlera":"..."},{"etikete":"Faktorët e vlerësimit","vlera":"..."}],"vleresim":"plotesuar|pjeserisht|mungon","shenim":"nëse nuk ka fëmijë, shëno se nuk zbatohet"},{"id":"pasoja","titull":"Pasojat pasurore & detyrimi ushqimor","permbajtja":[{"etikete":"Pjesëtimi i pasurisë","vlera":"..."},{"etikete":"Detyrimi ushqimor","vlera":"..."}],"vleresim":"plotesuar|pjeserisht|mungon","shenim":"..."}],"kualifikimi":{"lloji_ceshtjes":"divorc / kujdestari / ushqimore / birësim / atësi","afatet":"afate të mundshme"},"rrethanat":{"lehtesuese":["..."],"renduese":["..."]},"dallimi":"dallimi nga procedura të ngjashme familjare","perfundim":"a përmbushen kushtet dhe pika kyçe për interesin e fëmijës dhe palëve"}'
           };
         }
         if(type==='pune'){
           return {
             sys:'Jeni profesor i së drejtës së punës shqiptare. Analizoni vlefshmërinë e masës ndaj punëmarrësit (zgjidhja e kontratës, pushimi, diskriminimi). SHËNIM: Kodi i Punës mund të mos jetë në bazën e dhënë; mos shpikni numra nenesh dhe mbështetuni te teksti zyrtar kur jepet. Përgjigjuni VETËM me JSON të vlefshëm, pa tekst para ose pas.',
-            tmpl:'{"framework":"pune","vepra":"natyra e mosmarrëveshjes së punës","kuadri":[{"id":"marredhenia","titull":"Marrëdhënia e punës","permbajtja":[{"etikete":"Ekzistenca & lloji i kontratës","vlera":"..."},{"etikete":"Kohëzgjatja","vlera":"..."}],"vleresim":"plotesuar|pjeserisht|munget","shenim":"..."},{"id":"shkaku","titull":"Shkaku i masës/zgjidhjes","permbajtja":[{"etikete":"Arsyeja","vlera":"..."},{"etikete":"A është i justifikuar","vlera":"..."}],"vleresim":"plotesuar|pjeserisht|munget","shenim":"..."},{"id":"procedura","titull":"Procedura & afatet","permbajtja":[{"etikete":"Njoftimi/dëgjimi","vlera":"..."},{"etikete":"Forma & afati","vlera":"..."}],"vleresim":"plotesuar|pjeserisht|munget","shenim":"..."},{"id":"pasoja","titull":"Pasojat & mbrojtja","permbajtja":[{"etikete":"Dëmshpërblim/rikthim","vlera":"..."},{"etikete":"Të drejta të papaguara","vlera":"..."}],"vleresim":"plotesuar|pjeserisht|munget","shenim":"..."}],"kualifikimi":{"lloji":"zgjidhje kontrate / pushim / diskriminim / pagesa","parashkrimi":"afati i mundshëm i padisë"},"rrethanat":{"lehtesuese":["..."],"renduese":["..."]},"dallimi":"dallimi nga institute të ngjashme të punës","perfundim":"a është e vlefshme masa dhe pika kyçe"}'
+            tmpl:'{"framework":"pune","vepra":"natyra e mosmarrëveshjes së punës","kuadri":[{"id":"marredhenia","titull":"Marrëdhënia e punës","permbajtja":[{"etikete":"Ekzistenca & lloji i kontratës","vlera":"..."},{"etikete":"Kohëzgjatja","vlera":"..."}],"vleresim":"plotesuar|pjeserisht|mungon","shenim":"..."},{"id":"shkaku","titull":"Shkaku i masës/zgjidhjes","permbajtja":[{"etikete":"Arsyeja","vlera":"..."},{"etikete":"A është i justifikuar","vlera":"..."}],"vleresim":"plotesuar|pjeserisht|mungon","shenim":"..."},{"id":"procedura","titull":"Procedura & afatet","permbajtja":[{"etikete":"Njoftimi/dëgjimi","vlera":"..."},{"etikete":"Forma & afati","vlera":"..."}],"vleresim":"plotesuar|pjeserisht|mungon","shenim":"..."},{"id":"pasoja","titull":"Pasojat & mbrojtja","permbajtja":[{"etikete":"Dëmshpërblim/rikthim","vlera":"..."},{"etikete":"Të drejta të papaguara","vlera":"..."}],"vleresim":"plotesuar|pjeserisht|mungon","shenim":"..."}],"kualifikimi":{"lloji":"zgjidhje kontrate / pushim / diskriminim / pagesa","parashkrimi":"afati i mundshëm i padisë"},"rrethanat":{"lehtesuese":["..."],"renduese":["..."]},"dallimi":"dallimi nga institute të ngjashme të punës","perfundim":"a është e vlefshme masa dhe pika kyçe"}'
           };
         }
         if(type==='administrative'){
           return {
             sys:'Jeni profesor i së drejtës administrative shqiptare. Analizoni ligjshmërinë e aktit administrativ sipas shkaqeve klasike të pavlefshmërisë (kompetenca, procedura/forma, ligjshmëria materiale dhe qëllimi, cenimi i të drejtave). Mos shpikni numra nenesh; mbështetuni te teksti zyrtar kur jepet. Përgjigjuni VETËM me JSON të vlefshëm, pa tekst para ose pas.',
-            tmpl:'{"framework":"administrative","vepra":"akti administrativ i kundërshtuar","kuadri":[{"id":"kompetenca","titull":"Kompetenca e organit","permbajtja":[{"etikete":"A ishte organ kompetent","vlera":"..."}],"vleresim":"plotesuar|pjeserisht|munget","shenim":"..."},{"id":"procedura","titull":"Procedura & forma","permbajtja":[{"etikete":"Respektimi i procedurës","vlera":"..."},{"etikete":"Arsyetimi & forma","vlera":"..."}],"vleresim":"plotesuar|pjeserisht|munget","shenim":"..."},{"id":"ligjshmeria","titull":"Ligjshmëria materiale & qëllimi","permbajtja":[{"etikete":"Baza ligjore","vlera":"..."},{"etikete":"Keqpërdorim i pushtetit","vlera":"..."}],"vleresim":"plotesuar|pjeserisht|munget","shenim":"..."},{"id":"e_drejta","titull":"Cenimi i të drejtës & afati","permbajtja":[{"etikete":"Interesi i cenuar","vlera":"..."},{"etikete":"Afati i ankimit","vlera":"..."}],"vleresim":"plotesuar|pjeserisht|munget","shenim":"..."}],"kualifikimi":{"lloji_aktit":"individual / nënligjor","afati_ankimit":"afati i mundshëm"},"rrethanat":{"lehtesuese":["..."],"renduese":["..."]},"dallimi":"dallimi nga ankimi në rrugë administrative kundrejt asaj gjyqësore","perfundim":"a është i ligjshëm akti dhe baza më e fortë e kundërshtimit"}'
+            tmpl:'{"framework":"administrative","vepra":"akti administrativ i kundërshtuar","kuadri":[{"id":"kompetenca","titull":"Kompetenca e organit","permbajtja":[{"etikete":"A ishte organ kompetent","vlera":"..."}],"vleresim":"plotesuar|pjeserisht|mungon","shenim":"..."},{"id":"procedura","titull":"Procedura & forma","permbajtja":[{"etikete":"Respektimi i procedurës","vlera":"..."},{"etikete":"Arsyetimi & forma","vlera":"..."}],"vleresim":"plotesuar|pjeserisht|mungon","shenim":"..."},{"id":"ligjshmeria","titull":"Ligjshmëria materiale & qëllimi","permbajtja":[{"etikete":"Baza ligjore","vlera":"..."},{"etikete":"Keqpërdorim i pushtetit","vlera":"..."}],"vleresim":"plotesuar|pjeserisht|mungon","shenim":"..."},{"id":"e_drejta","titull":"Cenimi i të drejtës & afati","permbajtja":[{"etikete":"Interesi i cenuar","vlera":"..."},{"etikete":"Afati i ankimit","vlera":"..."}],"vleresim":"plotesuar|pjeserisht|mungon","shenim":"..."}],"kualifikimi":{"lloji_aktit":"individual / nënligjor","afati_ankimit":"afati i mundshëm"},"rrethanat":{"lehtesuese":["..."],"renduese":["..."]},"dallimi":"dallimi nga ankimi në rrugë administrative kundrejt asaj gjyqësore","perfundim":"a është i ligjshëm akti dhe baza më e fortë e kundërshtimit"}'
           };
         }
         if(type==='konsumator'){
           return {
             sys:'Jeni jurist shqiptar i specializuar në mbrojtjen e konsumatorit. Analizoni çështjen sipas të drejtave të konsumatorit (mospërputhja/defekti, garancia, detyrimet e tregtarit, mjetet juridike). Mos shpikni numra nenesh; mbështetuni te teksti zyrtar kur jepet. Përgjigjuni VETËM me JSON të vlefshëm, pa tekst para ose pas.',
-            tmpl:'{"framework":"konsumator","vepra":"natyra e ankesës konsumatore","kuadri":[{"id":"subjektet","titull":"Cilësia e konsumatorit & tregtarit","permbajtja":[{"etikete":"Konsumator","vlera":"..."},{"etikete":"Tregtar/ofrues","vlera":"..."}],"vleresim":"plotesuar|pjeserisht|munget","shenim":"..."},{"id":"mosperputhja","titull":"Mospërputhja ose defekti","permbajtja":[{"etikete":"Defekti/mungesa e konformitetit","vlera":"..."},{"etikete":"Koha e shfaqjes","vlera":"..."}],"vleresim":"plotesuar|pjeserisht|munget","shenim":"..."},{"id":"detyrimet","titull":"Detyrimet e tregtarit & garancia","permbajtja":[{"etikete":"Garancia ligjore/tregtare","vlera":"..."}],"vleresim":"plotesuar|pjeserisht|munget","shenim":"..."},{"id":"mjetet","titull":"Mjetet juridike","permbajtja":[{"etikete":"Riparim/zëvendësim","vlera":"..."},{"etikete":"Ulje çmimi/zgjidhje/dëm","vlera":"..."}],"vleresim":"plotesuar|pjeserisht|munget","shenim":"..."}],"kualifikimi":{"baza":"Kodi Civil / legjislacioni i mbrojtjes së konsumatorit","afatet":"afati i ankesës ose i garancisë"},"rrethanat":{"lehtesuese":["..."],"renduese":["..."]},"dallimi":"dallimi nga përgjegjësia e përgjithshme civile","perfundim":"a përmbushen kushtet dhe mjeti më i përshtatshëm"}'
+            tmpl:'{"framework":"konsumator","vepra":"natyra e ankesës konsumatore","kuadri":[{"id":"subjektet","titull":"Cilësia e konsumatorit & tregtarit","permbajtja":[{"etikete":"Konsumator","vlera":"..."},{"etikete":"Tregtar/ofrues","vlera":"..."}],"vleresim":"plotesuar|pjeserisht|mungon","shenim":"..."},{"id":"mosperputhja","titull":"Mospërputhja ose defekti","permbajtja":[{"etikete":"Defekti/mungesa e konformitetit","vlera":"..."},{"etikete":"Koha e shfaqjes","vlera":"..."}],"vleresim":"plotesuar|pjeserisht|mungon","shenim":"..."},{"id":"detyrimet","titull":"Detyrimet e tregtarit & garancia","permbajtja":[{"etikete":"Garancia ligjore/tregtare","vlera":"..."}],"vleresim":"plotesuar|pjeserisht|mungon","shenim":"..."},{"id":"mjetet","titull":"Mjetet juridike","permbajtja":[{"etikete":"Riparim/zëvendësim","vlera":"..."},{"etikete":"Ulje çmimi/zgjidhje/dëm","vlera":"..."}],"vleresim":"plotesuar|pjeserisht|mungon","shenim":"..."}],"kualifikimi":{"baza":"Kodi Civil / legjislacioni i mbrojtjes së konsumatorit","afatet":"afati i ankesës ose i garancisë"},"rrethanat":{"lehtesuese":["..."],"renduese":["..."]},"dallimi":"dallimi nga përgjegjësia e përgjithshme civile","perfundim":"a përmbushen kushtet dhe mjeti më i përshtatshëm"}'
           };
         }
         if(type==='civile'||type==='tregtare'){
           return {
             sys:'Jeni profesor i së drejtës private shqiptare. Analizoni elementet e përgjegjësisë juridike (veprimi i paligjshëm, dëmi, lidhja shkakësore, faji ose përgjegjësia objektive). Përgjigjuni VETËM me JSON të vlefshëm, pa tekst para ose pas. Mbështetuni te teksti zyrtar i neneve të dhëna.',
-            tmpl:'{"framework":"'+type+'","vepra":"natyra e mosmarrëveshjes","kuadri":[{"id":"veprimi","titull":"Veprimi / mosveprimi i paligjshëm","permbajtja":[{"etikete":"Sjellja","vlera":"..."},{"etikete":"Kundërligjshmëria","vlera":"..."}],"vleresim":"plotesuar|pjeserisht|munget","shenim":"..."},{"id":"demi","titull":"Dëmi","permbajtja":[{"etikete":"Dëmi i dalshëm","vlera":"..."},{"etikete":"Fitimi i munguar","vlera":"..."},{"etikete":"Dëmi jopasuror","vlera":"..."}],"vleresim":"plotesuar|pjeserisht|munget","shenim":"..."},{"id":"lidhja","titull":"Lidhja shkakësore","permbajtja":[{"etikete":"Shkak → pasojë","vlera":"..."}],"vleresim":"plotesuar|pjeserisht|munget","shenim":"..."},{"id":"faji","titull":"Faji / përgjegjësia","permbajtja":[{"etikete":"Forma e fajit","vlera":"..."},{"etikete":"Përgjegjësi objektive (pa faj)?","vlera":"..."}],"vleresim":"plotesuar|pjeserisht|munget","shenim":"..."}],"kualifikimi":{"lloji_pergjegjesise":"kontraktore / jashtëkontraktore","parashkrimi":"afati i mundshëm"},"rrethanat":{"lehtesuese":["..."],"renduese":["..."]},"dallimi":"dallimi nga institute të ngjashme","perfundim":"a përmbushen elementet dhe ku qëndron pika kyçe"}'
+            tmpl:'{"framework":"'+type+'","vepra":"natyra e mosmarrëveshjes","kuadri":[{"id":"veprimi","titull":"Veprimi / mosveprimi i paligjshëm","permbajtja":[{"etikete":"Sjellja","vlera":"..."},{"etikete":"Kundërligjshmëria","vlera":"..."}],"vleresim":"plotesuar|pjeserisht|mungon","shenim":"..."},{"id":"demi","titull":"Dëmi","permbajtja":[{"etikete":"Dëmi i dalshëm","vlera":"..."},{"etikete":"Fitimi i munguar","vlera":"..."},{"etikete":"Dëmi jopasuror","vlera":"..."}],"vleresim":"plotesuar|pjeserisht|mungon","shenim":"..."},{"id":"lidhja","titull":"Lidhja shkakësore","permbajtja":[{"etikete":"Shkak → pasojë","vlera":"..."}],"vleresim":"plotesuar|pjeserisht|mungon","shenim":"..."},{"id":"faji","titull":"Faji / përgjegjësia","permbajtja":[{"etikete":"Forma e fajit","vlera":"..."},{"etikete":"Përgjegjësi objektive (pa faj)?","vlera":"..."}],"vleresim":"plotesuar|pjeserisht|mungon","shenim":"..."}],"kualifikimi":{"lloji_pergjegjesise":"kontraktore / jashtëkontraktore","parashkrimi":"afati i mundshëm"},"rrethanat":{"lehtesuese":["..."],"renduese":["..."]},"dallimi":"dallimi nga institute të ngjashme","perfundim":"a përmbushen elementet dhe ku qëndron pika kyçe"}'
           };
         }
         return {
           sys:'Jeni jurist i specializuar shqiptar. Dekompononi çështjen në elementet juridike përbërëse. Përgjigjuni VETËM me JSON të vlefshëm, pa tekst para ose pas. Mbështetuni te teksti zyrtar i neneve të dhëna.',
-          tmpl:'{"framework":"'+(type||'juridik')+'","vepra":"natyra juridike e çështjes","kuadri":[{"id":"subjektet","titull":"Subjektet e marrëdhënies","permbajtja":[{"etikete":"Palët / legjitimimi","vlera":"..."}],"vleresim":"plotesuar|pjeserisht|munget","shenim":"..."},{"id":"objekti","titull":"Objekti i marrëdhënies","permbajtja":[{"etikete":"E drejta / detyrimi","vlera":"..."}],"vleresim":"plotesuar|pjeserisht|munget","shenim":"..."},{"id":"faktet","titull":"Faktet juridike","permbajtja":[{"etikete":"Veprimi / ngjarja","vlera":"..."}],"vleresim":"plotesuar|pjeserisht|munget","shenim":"..."},{"id":"pasojat","titull":"Pasojat juridike","permbajtja":[{"etikete":"Efektet","vlera":"..."}],"vleresim":"plotesuar|pjeserisht|munget","shenim":"..."}],"kualifikimi":{"baza":"baza ligjore","afatet":"afatet e zbatueshme"},"rrethanat":{"lehtesuese":[],"renduese":[]},"dallimi":"","perfundim":"..."}'
+          tmpl:'{"framework":"'+(type||'juridik')+'","vepra":"natyra juridike e çështjes","kuadri":[{"id":"subjektet","titull":"Subjektet e marrëdhënies","permbajtja":[{"etikete":"Palët / legjitimimi","vlera":"..."}],"vleresim":"plotesuar|pjeserisht|mungon","shenim":"..."},{"id":"objekti","titull":"Objekti i marrëdhënies","permbajtja":[{"etikete":"E drejta / detyrimi","vlera":"..."}],"vleresim":"plotesuar|pjeserisht|mungon","shenim":"..."},{"id":"faktet","titull":"Faktet juridike","permbajtja":[{"etikete":"Veprimi / ngjarja","vlera":"..."}],"vleresim":"plotesuar|pjeserisht|mungon","shenim":"..."},{"id":"pasojat","titull":"Pasojat juridike","permbajtja":[{"etikete":"Efektet","vlera":"..."}],"vleresim":"plotesuar|pjeserisht|mungon","shenim":"..."}],"kualifikimi":{"baza":"baza ligjore","afatet":"afatet e zbatueshme"},"rrethanat":{"lehtesuese":[],"renduese":[]},"dallimi":"","perfundim":"..."}'
         };
+      }
+      // Canonical assessment enum. Unknown/garbled input returns '' (i papërcaktuar) — it must
+      // NOT silently become "pjesërisht", which would cap the score at 6.5 for a parse failure.
+      function normAssess(v){
+        v=String(v==null?'':v).toLowerCase().trim();
+        if(v.indexOf('plot')===0) return 'plotesuar';
+        if(v.indexOf('mung')===0) return 'mungon';
+        if(v.indexOf('pjes')===0) return 'pjeserisht';
+        return '';
+      }
+      // The one binding sentence about objekti, built from the Penal Code's own structure.
+      function kpObjektiFact(c){
+        var o=c.o, arts=c.nums.map(function(n){ return 'neni '+n; }).join(', ');
+        var s='\n\nFAKT I DETYRUESHËM — OBJEKTI I VEPRËS PENALE (nxjerrë nga vetë struktura e Kodit Penal; MOS E NDRYSHO):\n'
+          + '• '+arts+' bën pjesë në KREUN «'+o.grupor_full+'» (nga neni '+o.grupor_neni+')'
+          + (o.specifik_full?(', SEKSIONI «'+o.specifik_full+'» (nga neni '+o.specifik_neni+')'):'')+'.\n'
+          + '• Objekti grupor: '+o.grupor+'.\n'
+          + '• Objekti i drejtpërdrejtë (vlera juridike e mbrojtur): '+o.drejtperdrejte+'.\n';
+        if(c.others.length)
+          s+='• Vepra të tjera të cituara cenojnë edhe: '+c.others.map(function(x){ return x.v+' ('+x.nums.map(function(n){ return 'neni '+n; }).join(', ')+')'; }).join('; ')+'.\n';
+        s+='Këto vlera janë përcaktuar nga ligji, jo nga vlerësimi yt: riprodhoji SAKTËSISHT te elementi "objekti". '
+          + 'Detyra jote është vetëm (i) të shpjegosh SI u cenua ose u vu në rrezik kjo vlerë në rastin konkret, '
+          + '(ii) të identifikosh objektin material (sendin, paranë, dokumentin ose trupin mbi të cilin ra veprimi) dhe '
+          + '(iii) subjektin pasiv (të dëmtuarin). Objekti material dhe subjekti pasiv NUK janë objekti i veprës penale.';
+        return s;
+      }
+      // Deterministic override of the model's objekti — the enforceShares pattern, but on a
+      // field rather than on prose. The table owns the two protected-value rows; the model keeps
+      // what is genuinely case-specific (how the value was harmed, objekti material, subjekti pasiv).
+      function enforceObjekti(d, c){
+        if(!d||!c||!c.o) return d;
+        if(!d.kuadri||Object.prototype.toString.call(d.kuadri)!=='[object Array]') return d;
+        var o=c.o, i, e=null;
+        for(i=0;i<d.kuadri.length;i++){
+          var k=d.kuadri[i]; if(!k) continue;
+          if(String(k.id||'')==='objekti'||/^objekt/i.test(String(k.titull||''))){ e=k; break; }
+        }
+        if(!e){ e={id:'objekti',titull:'Objekti i veprës penale',permbajtja:[],vleresim:'plotesuar',shenim:''}; d.kuadri.unshift(e); }
+        e.id='objekti'; e.titull='Objekti i veprës penale';
+        var keep=[];
+        ((e.permbajtja&&e.permbajtja.length)?e.permbajtja:[]).forEach(function(p){
+          if(!p) return;
+          var lab=String(p.etikete||''), val=String(p.vlera||'').trim();
+          if(!val||/^[.…\s]*$/.test(val)) return;                                  // drop "..." placeholders
+          if(/p[ëe]rgjithsh|grupor|specifik|drejtp[ëe]rdrejt/i.test(lab)) return;  // the table owns these
+          if(/material/i.test(lab)){ keep.push({etikete:'Objekti material',vlera:val}); return; }
+          if(/pasiv|d[ëe]mtuar/i.test(lab)){ keep.push({etikete:'Subjekti pasiv (i dëmtuari)',vlera:val}); return; }
+          keep.push({etikete:lab||'Si u cenua në këtë rast',vlera:val});
+        });
+        var rows=[
+          {etikete:'Objekti grupor',           vlera:o.grupor+' — '+o.grupor_full},
+          {etikete:'Objekti i drejtpërdrejtë', vlera:o.drejtperdrejte+(o.specifik_full?(' — '+o.specifik_full):'')}
+        ];
+        if(c.others.length)
+          rows.push({etikete:'Objekte të tjera të cenuara',vlera:c.others.map(function(x){ return x.v+' ('+x.nums.map(function(n){ return 'neni '+n; }).join(', ')+')'; }).join('; ')});
+        e.permbajtja=rows.concat(keep);
+        // A protected legal value always exists once a penal norm is in play; what can be missing
+        // is proof it was harmed. So a locked objekti must never trigger the 4.0 score cap.
+        if(normAssess(e.vleresim)==='mungon'||!normAssess(e.vleresim)) e.vleresim='pjeserisht';
+        e._locked=true;
+        var src='Objekti u përcaktua nga struktura e Kodit Penal ('+c.nums.map(function(n){ return 'neni '+n; }).join(', ')+'), jo nga vlerësimi i modelit.';
+        e.shenim=e.shenim?(String(e.shenim).replace(/\s*$/,'')+' '+src):src;
+        d.objekti_burimi={ nene:c.nums, grupor:o.grupor, drejtperdrejte:o.drejtperdrejte, kreu:o.grupor_full, seksioni:o.specifik_full };
+        return d;
       }
       function doctrineSummaryText(d){
         if(!d||!d.kuadri||!d.kuadri.length) return '';
-        var lines=d.kuadri.map(function(e){ return '- '+(e.titull||e.id)+': '+(e.vleresim||'')+(e.shenim?(' — '+e.shenim):''); });
+        function real(s){ s=String(s==null?'':s).trim(); return (!s||/^[.…\s\-–]*$/.test(s))?'':s; }
+        var lines=d.kuadri.map(function(e){
+          if(!e) return '';
+          var head='- '+(e.titull||e.id)+': '+(normAssess(e.vleresim)||'i papërcaktuar')+(real(e.shenim)?(' — '+real(e.shenim)):'');
+          var sub=[];
+          ((e.permbajtja)||[]).forEach(function(p){
+            if(!p||sub.length>=4) return;
+            var val=real(p.vlera); if(!val) return;
+            sub.push('   · '+(p.etikete||'')+': '+val.slice(0,220));
+          });
+          return sub.length?(head+'\n'+sub.join('\n')):head;
+        }).filter(Boolean);
         var q='';
-        if(d.kualifikimi){ q=Object.keys(d.kualifikimi).map(function(k){ return d.kualifikimi[k]?(k.replace(/_/g,' ')+': '+d.kualifikimi[k]):''; }).filter(Boolean).join('; '); }
-        return '\n\nDEKOMPOZIMI DOKTRINOR (përfshije në seksionin ANALIZË LIGJORE):\n'+lines.join('\n')+(q?('\nKualifikimi: '+q):'')+(d.perfundim?('\nPërfundim: '+d.perfundim):'');
+        if(d.kualifikimi){ q=Object.keys(d.kualifikimi).map(function(k){ return real(d.kualifikimi[k])?(k.replace(/_/g,' ')+': '+d.kualifikimi[k]):''; }).filter(Boolean).join('; '); }
+        var head='\n\nDEKOMPOZIMI DOKTRINOR (përfshije në seksionin ANALIZË LIGJORE):\n';
+        var b=d.objekti_burimi;
+        if(b) head+='OBJEKTI (i detyrueshëm, nxjerrë nga struktura e Kodit Penal, '+b.nene.map(function(n){ return 'neni '+n; }).join(', ')+'): vlera juridike e mbrojtur është '+b.drejtperdrejte+' (objekt grupor: '+b.grupor+'). Përdore këtë formulim në ANALIZË LIGJORE dhe mos e zëvendëso me sendin mbi të cilin ra veprimi.\n';
+        var body=head+lines.join('\n')+(q?('\nKualifikimi: '+q):'')+(real(d.perfundim)?('\nPërfundim: '+d.perfundim):'');
+        return body.length>3200?(body.slice(0,3200)+'…'):body;
       }
 
       var FORMAL_HEADS = /^(FAKTE|BAZ[ËE] LIGJORE|BAZE LIGJORE|ANALIZ[ËE] LIGJORE|ANALIZE LIGJORE|KUND[ËE]RP[ËE]RGJIGJE|KUNDERPERGJIGJE|KONKLUZIONE|REKOMANDIME)\s*:?\s*$/;
@@ -1348,18 +1596,31 @@
           br.push({k:'Vlerësim bazë', v:base, max:10});
         }
         var score=base;
-        var gf=(grounding&&grounding.found&&grounding.found.length)||0;
+        // Pinned general-part articles are added by us, not found by the model — counting them
+        // would make the −1.5 penalty unreachable and the +0.3 bonus automatic for every case.
+        var gf=0;
+        ((grounding&&grounding.found)||[]).forEach(function(a){ if(a&&!a.pinned) gf++; });
         if(gf===0){ score-=1.5; adj.push('Asnjë nen i konfirmuar në bazën ligjore: −1.5'); }
         else if(gf>=3){ score+=0.3; adj.push(gf+' nene të konfirmuara: +0.3'); }
         var miss=((strength&&strength.missing_evidence)||[]).length;
         if(miss>0){ var mp=Math.min(1.5,miss*0.3); score-=mp; adj.push(miss+' prova që mungojnë: −'+mp.toFixed(1)); }
         var capNote='';
         if(doctrine&&doctrine.kuadri&&doctrine.kuadri.length){
-          var hasMissing=false,hasPartial=false,tot=0,ful=0;
-          doctrine.kuadri.forEach(function(e){ var v=String(e&&e.vleresim||'').toLowerCase(); tot++; if(v.indexOf('mung')===0) hasMissing=true; else if(v.indexOf('plot')===0) ful+=1; else { hasPartial=true; ful+=0.5; } });
+          var missName='',partName='',tot=0,ful=0,unknown=0;
+          doctrine.kuadri.forEach(function(e){
+            var v=normAssess(e&&e.vleresim), nm=(e&&(e.titull||e.id))||'element';
+            if(!v){ unknown++; return; }                                   // excluded from ratio AND caps
+            tot++;
+            // _locked = supplied deterministically from the law's own structure; it cannot be
+            // "missing", so it must never trigger the 4.0 cap.
+            if(v==='mungon'){ if(!e._locked&&!missName) missName=nm; }
+            else if(v==='plotesuar') ful+=1;
+            else { ful+=0.5; if(!partName) partName=nm; }
+          });
+          if(unknown) adj.push(unknown+' element pa vlerësim të vlefshëm — përjashtuar nga llogaritja');
           if(tot>0){ var fr=ful/tot; score+=(fr-0.75)*0.8; adj.push('Përmbushja doktrinore '+Math.round(fr*100)+'%'); }
-          if(hasMissing){ score=Math.min(score,4); capNote='një element thelbësor mungon'; }
-          else if(hasPartial){ score=Math.min(score,6.5); capNote='një element pjesërisht i plotësuar'; }
+          if(missName){ score=Math.min(score,4); capNote='elementi «'+missName+'» mungon'; }
+          else if(partName){ score=Math.min(score,6.5); capNote='elementi «'+partName+'» është vetëm pjesërisht i plotësuar'; }
         }
         if(limitation){
           if(limitation.status==='likely-barred'){ score=Math.min(score,3); adj.push('Mundësisht i parashkruar → kufizim te 3.0'); if(!capNote) capNote='mundësisht i parashkruar'; }
@@ -1571,8 +1832,9 @@
         var gaps=collectGaps(store), advice=[];
         var d=store.doctrine;
         if(d&&d.kuadri) d.kuadri.forEach(function(e){
-          var v=String(e&&e.vleresim||'').toLowerCase();
-          if(v.indexOf('plot')!==0&&(e&&(e.titull||e.id)))
+          var v=normAssess(e&&e.vleresim);
+          // '' = i papërcaktuar (parse failure) — no point nudging the user to "strengthen" it
+          if(v&&v!=='plotesuar'&&(e&&(e.titull||e.id)))
             advice.push('Forconi elementin «'+esc(e.titull||e.id)+'»'+(e.shenim?(': '+esc(e.shenim)):''));
         });
         if(!gaps.length&&!advice.length){ block.hidden=true; el.innerHTML=''; if(row) row.hidden=true; return; }
@@ -1652,7 +1914,7 @@
             var href=lawHrefFor(String(l.name||'')); if(!href||seen[href]) return; seen[href]=true;
             var data=_lawCache[href];
             if(data && data[num]!=null){
-              hits.push({law:String(l.name||'').trim(),href:href,num:num,anchor:'neni-'+String(num).replace('/','-'),text:String(data[num]).replace(/\s+/g,' ').trim()});
+              hits.push({law:String(l.name||'').trim(),href:href,num:num,anchor:artAnchor(num),text:String(data[num]).replace(/\s+/g,' ').trim()});
             }
           });
           return hits;
@@ -1729,14 +1991,19 @@
         if(block) block.hidden=false;
         function txt(s){ return linkifyHtml(esc(String(s==null?'':s))); }
         if(labelEl){ var DLABEL={penale:'Përbërja e Veprës Penale',prone:'Mbrojtja e Pronësisë',familjare:'Elementet e Çështjes Familjare',pune:'Elementet e Marrëdhënies së Punës',administrative:'Ligjshmëria e Aktit Administrativ',konsumator:'Mbrojtja e Konsumatorit'}; labelEl.textContent=DLABEL[(d&&d.framework)||store.type]||'Elementet e Përgjegjësisë Juridike'; }
-        function assess(v){ v=String(v||'').toLowerCase(); if(v.indexOf('plot')===0) return {c:'#3d706a',t:'Plotësuar',cls:'op-el-ok'}; if(v.indexOf('mung')===0) return {c:'#b15c44',t:'Mungon',cls:'op-el-no'}; return {c:'#b8923a',t:'Pjesërisht',cls:'op-el-part'}; }
+        function assess(v){ v=normAssess(v);
+          if(v==='plotesuar')  return {c:'#3d706a',t:'Plotësuar',cls:'op-el-ok'};
+          if(v==='mungon')     return {c:'#b15c44',t:'Mungon',cls:'op-el-no'};
+          if(v==='pjeserisht') return {c:'#b8923a',t:'Pjesërisht',cls:'op-el-part'};
+          return {c:'#8a857c',t:'I papërcaktuar',cls:'op-el-na'}; }
         var html=d.vepra?'<p class="op-doc-vepra"><span>Natyra</span>'+txt(d.vepra)+'</p>':'';
         html+='<div class="op-el-grid">';
         d.kuadri.forEach(function(e){
           if(!e) return;
           var a=assess(e.vleresim);
           html+='<div class="op-el-card '+a.cls+'"><div class="op-el-head"><span class="op-el-title">'+esc(e.titull||e.id||'')+'</span><span class="op-el-badge" style="color:'+a.c+';border-color:'+a.c+'">'+a.t+'</span></div>';
-          if(e.permbajtja&&e.permbajtja.length){ html+='<dl class="op-el-list">'; e.permbajtja.forEach(function(p){ if(!p) return; html+='<dt>'+esc(p.etikete||'')+'</dt><dd>'+txt(p.vlera||'—')+'</dd>'; }); html+='</dl>'; }
+          // On a locked element the first two rows come from the Code's own structure — mark them.
+          if(e.permbajtja&&e.permbajtja.length){ html+='<dl class="op-el-list">'; e.permbajtja.forEach(function(p,pi){ if(!p) return; var det=e._locked&&pi<2; html+='<dt>'+esc(p.etikete||'')+'</dt><dd>'+txt(p.vlera||'—')+(det?' <span class="op-el-det" title="Nxjerrë nga struktura e Kodit Penal">§</span>':'')+'</dd>'; }); html+='</dl>'; }
           if(e.shenim) html+='<p class="op-el-note">'+txt(e.shenim)+'</p>';
           html+='</div>';
         });
@@ -1807,12 +2074,20 @@
           store.strength=safeJson(r2); rowDone(1);
           return (store.groundingP||Promise.resolve({text:'',found:[],missing:[],nums:{}})).then(function(g){
             store.grounding=g;
-            return (concept?keywordGround(concept.href,concept.name,concept.kw,concept.limit):Promise.resolve(null)).then(function(kg){
+            return (concept?keywordGround(concept.href,concept.name,concept.kw,concept.limit,concept.min):Promise.resolve(null)).then(function(kg){
             mergeGrounding(g,kg);
+            return (concept&&concept.pin?pinGround(concept.href,concept.name,concept.pin,concept.pinCap):Promise.resolve(null)).then(function(pg){
+            mergeGrounding(g,pg);
             return semanticGround(store.laws, facts).then(function(sg){
             mergeGrounding(g,sg);
             store.groundingText=g.text?('\n\n'+g.text):'';
             var GT=store.groundingText;
+            // Objekti i veprës penale comes from the Penal Code's own KREU/SEKSIONI structure,
+            // not from the model — injected as a binding fact and re-enforced on the way out.
+            var dType=isProp?'prone':type;
+            var kpCase=(dType==='penale')?kpObjektiForCase(store.laws, lawHrefFor):null;
+            store.kpObjekti=kpCase;
+            var objFact=kpCase?kpObjektiFact(kpCase):'';
             [2,3,4,5,6].forEach(rowActive);
             var W=store.strength.weaknesses||[];
             var tasks=[
@@ -1829,10 +2104,10 @@
                   ctx+'\n\nBazë ligjore:\n'+store.lawList+'\n\nKrijo plan veprimi praktik. JSON:\n{"steps":[{"action":"...","priority":"Lartë|Mesatare|Ulët","deadline":"..."}],"evidence":["..."],"deadlines":[{"what":"...","timeframe":"..."}]}',600,0.35)
                 .then(function(v){ rowDone(5); return v; }).catch(function(e){ if(e&&e.name==='AbortError') throw e; rowFail(5); return null; }); },
               function(){
-                var spec=doctrineSpec(isProp?'prone':type);
+                var spec=doctrineSpec(dType);
                 return runCall(8,spec.sys,
-                  'SITUATA:\n'+ctx+primer+'\n\nBazë ligjore:\n'+store.lawList+GT+
-                  '\n\nKryej dekompozimin doktrinor të çështjes. Për çdo element jep vlerësimin "plotesuar", "pjeserisht" ose "munget" te fusha "vleresim", dhe te "shenim" shpjego shkurt çfarë e provon elementin ose çfarë mungon për ta vërtetuar. Mbështetu te teksti zyrtar i neneve të dhëna; mos shpik numra ose vepra. Përdor SAKTËSISHT këtë strukturë JSON:\n'+spec.tmpl,
+                  'SITUATA:\n'+ctx+primer+'\n\nBazë ligjore:\n'+store.lawList+objFact+GT+
+                  '\n\nKryej dekompozimin doktrinor të çështjes. Për çdo element jep vlerësimin "plotesuar", "pjeserisht" ose "mungon" te fusha "vleresim", dhe te "shenim" shpjego shkurt çfarë e provon elementin ose çfarë mungon për ta vërtetuar. Mbështetu te teksti zyrtar i neneve të dhëna; mos shpik numra ose vepra. Përdor SAKTËSISHT këtë strukturë JSON:\n'+spec.tmpl,
                   1900,0.3)
                 .then(function(v){ rowDone(6); return v; }).catch(function(e){ if(e&&e.name==='AbortError') throw e; rowFail(6); return null; }); }
             ];
@@ -1840,14 +2115,16 @@
             return runLimited(tasks,PARALLEL_LIMIT);
             });
             });
+            });
           });
         })
         .then(function(res){
           store.opposition=res[0]; store.jurisprudence=res[1]; var _r5=safeJson(res[2])||{}; store.forecastDrivers=_r5.drivers||[]; store.forecastDamages=_r5.damages||[]; store.plan=safeJson(res[3]); store.doctrine=safeJson(res[4]);
+          if(dType==='penale') store.doctrine=enforceObjekti(store.doctrine, store.kpObjekti);
           store.adr=adrApplicable(type)?(safeJson(res[5])||null):null;
           rowActive(7);
           var S=store.strength;
-          return runCall(7,'Jeni jurist i lartë shqiptar. Shkruani mendim ligjor formal, të strukturuar dhe profesional. Citoni nenet sipas tekstit zyrtar të dhënë më poshtë dhe, kur është e mundur, përdorni formulimin e tij. MOS citoni nene që nuk janë dhënë. Përfshi në analizë dekompozimin doktrinor të dhënë (objekti, ana objektive, subjekti, ana subjektive ose elementet e përgjegjësisë), duke vlerësuar nëse secili element përmbushet.',
+          return runCall(7,'Jeni jurist i lartë shqiptar. Shkruani mendim ligjor formal, të strukturuar dhe profesional. Citoni nenet sipas tekstit zyrtar të dhënë më poshtë dhe, kur është e mundur, përdorni formulimin e tij. MOS citoni nene që nuk janë dhënë. Përfshi në analizë dekompozimin doktrinor të dhënë, duke vlerësuar nëse secili element përmbushet. Për çështjet penale elementët janë: OBJEKTI — vlera juridike e mbrojtur nga norma (te vrasja: jeta; te vjedhja: pronësia), kurrë sendi ose trupi mbi të cilin ra veprimi, i cili quhet objekt material; ANA OBJEKTIVE — veprimi/mosveprimi, pasoja, lidhja shkakësore; SUBJEKTI — mosha dhe përgjegjshmëria, cilësi të veçanta; ANA SUBJEKTIVE — forma e fajit, motivi, qëllimi. Për çështjet jopenale përdor elementet e përgjegjësisë juridike.',
             'SITUATA:\n'+ctx+primer+'\n\nLIGJET ZBATUESE:\n'+store.lawList+'\n\nFORCAT:\n'+((S.strengths||[]).join('\n')||'-')+'\n\nDOBËSITË:\n'+((S.weaknesses||[]).join('\n')||'-')+(store.opposition?'\n\nARGUMENTET KUNDËRSHTARE:\n'+store.opposition:'')+(store.jurisprudence?'\n\nJURISPRUDENCA:\n'+store.jurisprudence:'')+(store.groundingText||'')+doctrineSummaryText(store.doctrine)+'\n\nDrafto MENDIM LIGJOR formal me seksionet (secili titull në krye rreshti):\nFAKTE\nBAZË LIGJORE\nANALIZË LIGJORE\nKUNDËRPËRGJIGJE\nKONKLUZIONE\nREKOMANDIME\n\nTe KUNDËRPËRGJIGJE, përgjigju argumenteve kundërshtare. Ji i plotë, specifik dhe profesional.',2400,0.45,true);
         })
         .then(function(r7){
@@ -2467,9 +2744,22 @@
       }
       function penCompute(input, g){
         var found=extractSanctions(g&&g.refs);
-        if(!found.length) return null; // s'ka masë dënimi në tekstin e gjetur → asnjë diapazon
+        // Protected legal value, read off the KREU/SEKSIONI the article belongs to (same table
+        // the Opinion engine uses). Shown even when no sanction range could be extracted.
+        var objs=[], seenO={};
+        ((g&&g.refs)||[]).forEach(function(a){
+          if(!a||a.file!=='kodi-penal.html') return;
+          var o=kpObjekti(a.num); if(!o) return;
+          var key=o.specifik_full||o.grupor_full; if(seenO[key]) return; seenO[key]=1;
+          objs.push('<li><b>Neni '+esc(a.num)+'</b> → vlera juridike e mbrojtur: <b>'+esc(o.drejtperdrejte)+'</b> <small>('+esc(o.grupor_full)+(o.specifik_full?(' · '+esc(o.specifik_full)):'')+')</small></li>');
+        });
+        var objHtml=objs.length?('<p>Objekti i veprës penale — vlera juridike që mbron neni, sipas kreut/seksionit ku bën pjesë (llogaritje, jo AI):</p><ul class="tool-checklist">'+objs.join('')+'</ul>'):'';
+        if(!found.length){
+          // no sanction phrasing in the retrieved text → still worth showing the objekti alone
+          return objHtml?{ label:'Objekti i veprës penale (nga struktura e Kodit)', body:objHtml }:null;
+        }
         var base=(typeof LAW_BASE!=='undefined')?LAW_BASE:'';
-        var body='<p>Diapazoni i nxjerrë automatikisht nga teksti zyrtar i neneve të gjetura (llogaritje, jo AI):</p><ul class="tool-checklist">';
+        var body=objHtml+'<p>Diapazoni i nxjerrë automatikisht nga teksti zyrtar i neneve të gjetura (llogaritje, jo AI):</p><ul class="tool-checklist">';
         found.forEach(function(a){
           var href=base+a.file+'#neni-'+String(a.num).split('/')[0];
           a.items.forEach(function(it){
@@ -2524,7 +2814,7 @@
         return { title:'Analizë e Shkeljes & Sanksioni', eyebrow:'Analizë Sanksioni', lawFiles:[lf], input:(typ?('Lloji: '+typ+'. '):'')+sit,
           compute:penCompute, // diapazoni vetëm nga teksti zyrtar; pa gjetje → pa diapazon
           aiSections:[
-            { label:'Kualifikimi i shkeljes & përbërja', maxTok:1100, temp:0.3, sys:'Jeni jurist penalist shqiptar. Mbështetu te teksti zyrtar i neneve të dhëna; mos shpik numra nenesh apo emra veprash. Nëse është vepër penale, analizo përbërjen me 4 elementet (OBJEKTI, ANA OBJEKTIVE, SUBJEKTI, ANA SUBJEKTIVE); përndryshe kualifiko shkeljen.', usr:function(input,gt){ return 'Kualifiko shkeljen që vijon dhe analizo përbërjen e saj.'+gt+'\n\nSITUATA:\n'+input; } },
+            { label:'Kualifikimi i shkeljes & përbërja', maxTok:1100, temp:0.3, sys:'Jeni jurist penalist shqiptar. Mbështetu te teksti zyrtar i neneve të dhëna; mos shpik numra nenesh apo emra veprash. Nëse është vepër penale, analizo përbërjen me 4 elementet: OBJEKTI, ANA OBJEKTIVE, SUBJEKTI, ANA SUBJEKTIVE. OBJEKTI është vlera juridike që mbron norma penale dhe që cenohet nga vepra (te vrasja: jeta; te plagosja: shëndeti; te vjedhja: pronësia) — NUK është sendi apo trupi mbi të cilin ra veprimi; atë jepe veçmas si «objekt material», dhe të dëmtuarin si «subjekt pasiv». Përndryshe kualifiko shkeljen.', usr:function(input,gt){ return 'Kualifiko shkeljen që vijon dhe analizo përbërjen e saj.'+gt+'\n\nSITUATA:\n'+input; } },
             { label:'Forma e veprës & zbatimi i sanksionit', maxTok:700, temp:0.3, sys:'Jeni jurist shqiptar. Për masën e dënimit cito VETËM fjalë për fjalë nga teksti zyrtar i neneve të dhëna. Nëse asnjë nen i dhënë nuk përcakton masë dënimi, mos përmend fare shifra apo diapazon — thuaj se teksti i dhënë nuk e përcakton masën.', usr:function(input,gt){ return 'Shpjego formën bazë vs të kualifikuar të veprës dhe stadin (tentativë/e konsumuar) nëse zbatohet. Çdo masë dënimi që përmend duhet të jetë citim fjalë për fjalë nga nenet e dhëna; mos jep shifra që nuk gjenden në to.'+gt+'\n\nSITUATA:\n'+input; } },
             { label:'Rrethana lehtësuese/rënduese & mbrojtja', maxTok:700, temp:0.4, sys:'Jeni avokat mbrojtës shqiptar.', usr:function(input,gt){ return 'Listo rrethanat lehtësuese dhe rënduese, dhe linjat kryesore të mbrojtjes/kundërshtimit.'+gt+'\n\nSITUATA:\n'+input; } }
           ] }; }

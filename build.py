@@ -44,7 +44,20 @@ LAWS = [
 RE_PJESA   = re.compile(r'^(PJESA\s+[IVXLC\d]+)\s*(.*)?$')
 RE_TITULLI = re.compile(r'^(TITULLI\s+[IVXLC\d]+)\s*(.*)?$')
 RE_KREU    = re.compile(r'^(KREU\s+[IVXLC\d]+)\s*(.*)?$')
-RE_NENI    = re.compile(r'^(Neni\s+(\d+)(?:/[a-z])?)\s*(.*)?$')
+# Article numbers carry Albanian-letter suffixes (Neni 170/ç), two-letter digraphs
+# (Neni 319/dh), numeric suffixes (Neni 399/10) and MULTIPLE segments (Neni 143/a/8).
+# The old single-ASCII-letter pattern collapsed all of these onto the base number, silently
+# overwriting 36 real articles across the corpus and emitting duplicate DOM ids.
+RE_NENI    = re.compile(r'^(Neni\s+(\d+(?:/(?:[a-zçë]{1,2}|\d{1,2}))*))\s*(.*)$')
+
+
+def _is_citation(m):
+    """True when a line only *mentions* an article mid-sentence, e.g.
+    'Neni 450 i këtij Kodi nuk i heq të drejtën...'. Real headings are either bare
+    ('Neni 1'), or continue with a title / amendment note that starts uppercase or '('.
+    Conservative on purpose: only a lowercase continuation is treated as a citation."""
+    rest = (m.group(3) or '').strip()
+    return bool(rest) and rest[0].islower()
 RE_PAGE_NUM = re.compile(r'^\s*\d{1,4}\s*$')  # bare page numbers
 RE_FOOTNOTE = re.compile(r'^\d+\s+Ligj\s+nr\.')  # common footnote pattern
 
@@ -134,7 +147,7 @@ def parse_structure(lines: list[str]) -> tuple[str, dict]:
             text  = f"{label} {rest}".strip() if rest else label
             html_parts.append(f'<h3>{escape_html(text)}</h3>')
 
-        elif m_neni:
+        elif m_neni and not _is_citation(m_neni):
             flush_buffer(); finalize_neni()
             neni_label = m_neni.group(1)          # "Neni 698" or "Neni 698/a"
             neni_num   = neni_label[5:].strip()   # "698" or "698/a"

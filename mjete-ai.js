@@ -2041,6 +2041,9 @@
           ? '\n\n(Seksioni «'+REFINE_MARK+'» brenda fakteve përmban përgjigje TË KONFIRMUARA nga klienti — trajtoji si fakte të vërtetuara dhe MOS i ripyet.)' : '';
         var ctx='Lloji: çështje '+type+'.\nFaktet: '+(facts||'(shih dokumentin e ngarkuar)')+(parties?'\nPalët: '+parties:'')+(goal?'\nQëllimi: '+goal:'')+refineNote+attach;
         var isProp=(type==='prone')||((type==='civile'||type==='tregtare')&&detectProperty(facts+' '+parties+' '+goal+' '+attachedText));
+        // Declared at generate() scope on purpose: it is read both inside the grounding
+        // callback and in the later .then(res) continuation, which is a sibling closure.
+        var dType=isProp?'prone':type;
         var conceptKey=isProp?'prone':(CONCEPTS[type]?type:'');
         var concept=conceptKey?CONCEPTS[conceptKey]:null;
         var primer=concept?concept.primer:'';
@@ -2084,7 +2087,7 @@
             var GT=store.groundingText;
             // Objekti i veprës penale comes from the Penal Code's own KREU/SEKSIONI structure,
             // not from the model — injected as a binding fact and re-enforced on the way out.
-            var dType=isProp?'prone':type;
+            // (dType is declared at generate() scope; store.laws only exists from here on.)
             var kpCase=(dType==='penale')?kpObjektiForCase(store.laws, lawHrefFor):null;
             store.kpObjekti=kpCase;
             var objFact=kpCase?kpObjektiFact(kpCase):'';

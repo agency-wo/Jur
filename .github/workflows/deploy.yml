@@ -42,6 +42,15 @@ jobs:
           pip install pdfplumber gdown jinja2
           python build.py
 
+      # Stamp the service-worker cache version with the commit SHA. Precached shell assets are
+      # only replaced when VERSION changes, so a hand-maintained version means one forgotten bump
+      # serves every returning visitor a stale bundle indefinitely — which is exactly how a
+      # shipped fix once failed to reach anyone. Deriving it from the SHA makes that impossible.
+      - name: Stamp service-worker version
+        run: |
+          sed -i "s/^var VERSION = '[^']*';/var VERSION = '${GITHUB_SHA::12}';/" sw.js
+          grep -n "^var VERSION" sw.js
+
       # Sources stay readable in the repo; only the deployed artifact is minified (~60% smaller).
       - name: Minify JS/CSS
         run: |

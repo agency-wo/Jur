@@ -10,7 +10,7 @@
 // Bump VERSION to force a fresh shell + drop old caches on the next visit.
 'use strict';
 
-var VERSION = 'v5';
+var VERSION = 'v6';
 var SHELL = 'shell-' + VERSION;
 var RUNTIME = 'runtime-' + VERSION;
 
@@ -75,10 +75,18 @@ self.addEventListener('fetch', function (e) {
   var isCdnLib = /(^|\.)(cdnjs\.cloudflare\.com|cdn\.jsdelivr\.net)$/.test(url.host);
   if (!sameOrigin && !isFont && !isCdnLib) return; // AI APIs etc. → straight to network, never cached.
 
-  function putRuntime(res) {
+  // Write the refreshed copy back into whichever cache actually ANSWERS for this request.
+  // caches.match() searches SHELL first (it is created first), so a precached asset whose
+  // background refresh only ever landed in RUNTIME was served stale forever — a shipped fix
+  // could never reach a returning visitor without a VERSION bump. Now the shell self-heals.
+  function putCache(res) {
     if (res && (res.status === 200 || res.type === 'opaque')) {
       var copy = res.clone();
-      caches.open(RUNTIME).then(function (c) { c.put(req, copy); }).catch(function () {});
+      caches.open(SHELL).then(function (sc) {
+        return sc.match(req).then(function (inShell) {
+          return caches.open(inShell ? SHELL : RUNTIME).then(function (c) { return c.put(req, copy); });
+        });
+      }).catch(function () {});
     }
     return res;
   }
@@ -87,7 +95,7 @@ self.addEventListener('fetch', function (e) {
   if (isCdnLib) {
     e.respondWith(
       caches.match(req).then(function (cached) {
-        return cached || fetch(req).then(putRuntime).catch(function () { return cached; });
+        return cached || fetch(req).then(putCache).catch(function () { return cached; });
       })
     );
     return;
@@ -98,7 +106,7 @@ self.addEventListener('fetch', function (e) {
   var isConfig = sameOrigin && /\/config\.js$/.test(url.pathname);
   if (isConfig || req.mode === 'navigate') {
     e.respondWith(
-      fetch(req).then(putRuntime).catch(function () {
+      fetch(req).then(putCache).catch(function () {
         return caches.match(req).then(function (cached) {
           return cached || (req.mode === 'navigate' ? caches.match('index.html') : Promise.reject(new Error('offline')));
         });
@@ -110,7 +118,7 @@ self.addEventListener('fetch', function (e) {
   // Everything else: stale-while-revalidate — serve cache instantly, refresh in background.
   e.respondWith(
     caches.match(req).then(function (cached) {
-      var network = fetch(req).then(putRuntime).catch(function () { return cached; });
+      var network = fetch(req).then(putCache).catch(function () { return cached; });
       return cached || network;
     })
   );

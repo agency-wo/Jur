@@ -998,7 +998,10 @@
       'use strict';
 
       var GROQ_URL       = 'https://api.groq.com/openai/v1/chat/completions';
-      var MODEL          = 'llama-3.3-70b-versatile';
+      // 2026-10-25: was llama-3.3-70b-versatile, which Groq no longer serves.
+      // Only reached when aiChain() is empty, i.e. ai.js did not load; the
+      // configured chain wins whenever there is one.
+      var MODEL          = 'openai/gpt-oss-20b';
       var PARALLEL_LIMIT = 5;
       var MAX_RETRIES    = 3;
 
@@ -1422,7 +1425,12 @@
         var providers = (chain && chain.length) ? chain : [{url:GROQ_URL, key:getKey(), model:MODEL}];
         function tryProvider(pi){
           var p = providers[pi];
-          var body = JSON.stringify(Object.assign({model:p.model}, payload));
+          // This builder predates aiFetch and is still separate, so it has to ask
+          // for the same reasoning settings — otherwise a gpt-oss model spends the
+          // whole max_tokens thinking and line 1437 below throws "Përgjigje boshe".
+          // Reuses ai.js's helper rather than restating the rule in two places.
+          var rx = (typeof aiReasonerExtras === 'function') ? aiReasonerExtras(p, payload) : null;
+          var body = JSON.stringify(Object.assign({model:p.model}, payload, rx));
           function attempt(n){
             // Per-attempt timeout (same AI_TIMEOUT_MS/withTimeout as ai.js's aiFetch) so a
             // hung provider advances the retry/fallback chain instead of stalling forever.

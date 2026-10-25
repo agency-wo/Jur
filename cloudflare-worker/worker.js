@@ -37,13 +37,34 @@ function withTimeout(ms) {
 }
 
 // Same provider list/order as ai.js — but the keys live only here.
+// Reasoning models bill their thinking against max_tokens. Measured 2026-10-25
+// on gpt-oss: a 260-token budget spent 224 of them thinking at the default effort
+// and the answer came back truncated; 'low' spent 12. At 40 tokens even 'low'
+// returns nothing at all. max_tokens is a ceiling and not a charge, so flooring
+// it is free insurance. Gated on the Groq host, so a provider that does not know
+// these parameters is never sent them. Mirrors ai.js.
+const AI_REASONER = /gpt-oss|qwen3|deepseek-r1|thinking|reason|-r1\b/i;
+const AI_REASONER_MIN_TOKENS = 500;
+
+function reasonerExtras(p, payload) {
+  if (!p.url.includes('groq.com') || !AI_REASONER.test(p.model)) return null;
+  const extra = { reasoning_effort: 'low', include_reasoning: false };
+  if (!(payload.max_tokens > AI_REASONER_MIN_TOKENS)) extra.max_tokens = AI_REASONER_MIN_TOKENS;
+  return extra;
+}
+
 function providerChain(env, strong) {
   const chain = [];
   const add = (key, url, model, isStrong) => { if (key) chain.push({ key, url, model, strong: !!isStrong }); };
-  add(env.GROQ_KEY,     'https://api.groq.com/openai/v1/chat/completions', 'llama-3.3-70b-versatile');
+  // 2026-10-25: the Groq ids were llama-3.3-70b-versatile and
+  // moonshotai/kimi-k2-instruct. Groq no longer serves either; asking the key
+  // directly it lists exactly four chat models, of which gpt-oss is the usable
+  // pair. Kept identical to ai.js so the browser path and the Worker path cannot
+  // answer from different models.
+  add(env.GROQ_KEY,     'https://api.groq.com/openai/v1/chat/completions', 'openai/gpt-oss-20b');
   add(env.CEREBRAS_KEY, 'https://api.cerebras.ai/v1/chat/completions',     'gpt-oss-120b');
   add(env.GEMINI_KEY,   'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', 'gemini-2.5-flash');
-  add(env.GROQ_KEY,     'https://api.groq.com/openai/v1/chat/completions', 'moonshotai/kimi-k2-instruct', true);
+  add(env.GROQ_KEY,     'https://api.groq.com/openai/v1/chat/completions', 'openai/gpt-oss-120b', true);
   add(env.CEREBRAS_KEY, 'https://api.cerebras.ai/v1/chat/completions',     'qwen-3-235b-a22b-instruct-2507', true);
   if (!strong) return chain;
   const strongOnes = chain.filter(p => p.strong);
@@ -66,7 +87,7 @@ async function handleChat(request, env) {
       const res = await fetch(p.url, {
         method: 'POST', signal: t.signal,
         headers: { Authorization: 'Bearer ' + p.key, 'Content-Type': 'application/json' },
-        body: JSON.stringify(Object.assign({ model: p.model }, payload))
+        body: JSON.stringify(Object.assign({ model: p.model }, payload, reasonerExtras(p, payload)))
       });
       t.done();
       if (res.ok) return res;

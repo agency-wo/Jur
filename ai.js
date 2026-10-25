@@ -14,12 +14,17 @@ var AI_PROVIDERS = [];
     if (key && String(key).indexOf('YOUR_') !== 0) AI_PROVIDERS.push({ url: url, key: key, model: model, strong: !!strong });
   }
   // Fast default chain (used for the bulk of calls):
-  add(typeof GROQ_KEY       !== 'undefined' ? GROQ_KEY       : '', 'https://api.groq.com/openai/v1/chat/completions',   'llama-3.3-70b-versatile');
+  // 2026-10-25: was llama-3.3-70b-versatile. Groq retired it along with
+  // llama-3.1-8b-instant, gemma2-9b-it and kimi-k2; asking the key directly, it
+  // can list exactly four chat models and gpt-oss is the usable pair. See the
+  // REASONING note below — the replacements think before they answer.
+  add(typeof GROQ_KEY       !== 'undefined' ? GROQ_KEY       : '', 'https://api.groq.com/openai/v1/chat/completions',   'openai/gpt-oss-20b');
   add(typeof CEREBRAS_KEY   !== 'undefined' ? CEREBRAS_KEY   : '', 'https://api.cerebras.ai/v1/chat/completions',       'gpt-oss-120b');
   add(typeof GEMINI_KEY     !== 'undefined' ? GEMINI_KEY     : '', 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', 'gemini-2.5-flash');
   // Stronger reasoners for the critical calls — reuse the EXISTING free Groq/Cerebras keys (no new key, CORS-OK).
   // If a model id is ever retired, the call just falls back to the fast chain. To swap, edit the model id here.
-  add(typeof GROQ_KEY       !== 'undefined' ? GROQ_KEY       : '', 'https://api.groq.com/openai/v1/chat/completions',   'moonshotai/kimi-k2-instruct',     true);
+  // 2026-10-25: was moonshotai/kimi-k2-instruct, which Groq no longer serves.
+  add(typeof GROQ_KEY       !== 'undefined' ? GROQ_KEY       : '', 'https://api.groq.com/openai/v1/chat/completions',   'openai/gpt-oss-120b',             true);
   add(typeof CEREBRAS_KEY   !== 'undefined' ? CEREBRAS_KEY   : '', 'https://api.cerebras.ai/v1/chat/completions',       'qwen-3-235b-a22b-instruct-2507',  true);
 })();
 
@@ -52,6 +57,40 @@ function withTimeout(signal, ms) {
 // Drop-in replacement for fetch() to the chat endpoint. Accepts the same options object
 // the call sites already build; it ignores the url/headers/model in there and instead
 // tries each provider in order, returning the first OK Response (caller still does r.json()).
+// REASONING MODELS AND THE TOKEN BUDGET.
+//
+// Every model Groq still serves free is a reasoning model: it spends tokens
+// thinking before it answers, and that thinking is billed against max_tokens.
+// Measured against the live API on 2026-10-25, asking gpt-oss the same shape of
+// question this file sends:
+//
+//   budget 260, default effort -> 224 tokens spent thinking, answer TRUNCATED
+//   budget 260, effort 'low'   ->  12 tokens spent thinking, answer complete
+//   budget  40, effort 'low'   ->  36 tokens spent thinking, answer EMPTY
+//
+// The floor is 500 because the thinking cost is NOT stable: across runs on the
+// same prompt it ranged from 7 to 105 tokens. A multi-sentence answer at a
+// 260-token budget came back with finish_reason "length", cut off mid-sentence,
+// and 400 was the smallest budget that completed. 500 leaves headroom above the
+// worst thinking cost seen.
+//
+// Raising it is free: max_tokens is a ceiling, not a charge, the model stops when
+// it is done (at a 1200 budget it used 79), and the prompts here state their own
+// length, so a bigger ceiling does not produce a longer answer. A truncated or
+// empty answer, by contrast, costs the user a working feature.
+//
+// Gated on the Groq host rather than the model id, so a provider that does not
+// know these parameters is never sent them.
+var AI_REASONER = /gpt-oss|qwen3|deepseek-r1|thinking|reason|-r1\b/i;
+var AI_REASONER_MIN_TOKENS = 500;
+
+function aiReasonerExtras(p, payload) {
+  if (p.url.indexOf('groq.com') === -1 || !AI_REASONER.test(p.model)) return null;
+  var extra = { reasoning_effort: 'low', include_reasoning: false };
+  if (!(payload.max_tokens > AI_REASONER_MIN_TOKENS)) extra.max_tokens = AI_REASONER_MIN_TOKENS;
+  return extra;
+}
+
 function aiFetch(opts, strong) {
   var payload = {};
   try { payload = JSON.parse((opts && opts.body) || '{}'); } catch (e) { payload = {}; }
@@ -61,7 +100,7 @@ function aiFetch(opts, strong) {
   if (!chain.length) return Promise.reject(new Error('No AI provider key configured'));
   function tryP(i) {
     var p = chain[i];
-    var body = JSON.stringify(Object.assign({ model: p.model }, payload));
+    var body = JSON.stringify(Object.assign({ model: p.model }, payload, aiReasonerExtras(p, payload)));
     var t = withTimeout(signal, AI_TIMEOUT_MS);
     return fetch(p.url, {
       method: 'POST', signal: t.signal,

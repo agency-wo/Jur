@@ -16,6 +16,21 @@ Pjesa e Posaçme, both tables strictly ascending), `kpObjektiForCase`, `enforceO
 
 Needs no browser, no network and no `data/` — the tables are arithmetic.
 
+## `ai-chain.test.js` — the AI provider chain (fast, offline)
+```bash
+node tests/ai-chain.test.js
+```
+Loads the real `ai.js` and `cloudflare-worker/worker.js` with `fetch` replaced, and checks:
+- the chain's models and order, and that no retired model or dead provider is named;
+- the reasoning settings each provider gets;
+- that an empty answer moves on to the next provider;
+- that a 429 is what the caller reads when nothing answers;
+- the web search's fallback from flash to flash-lite;
+- that with `AI_PROXY` set no key and no model leave the browser;
+- the Worker's chain and CORS.
+
+The free tiers rotate their models every few months, so this is the file to run after changing one.
+
 ## `pipeline.smoke.js` — the whole analysis end-to-end (headless)
 
 ```bash

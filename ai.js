@@ -9,23 +9,41 @@
 'use strict';
 
 var AI_PROVIDERS = [];
+// The Cloudflare Worker in cloudflare-worker/ holds the keys as Worker secrets. When config.js names it
+// (AI_PROXY), every call goes there and NO key is read from config.js: a key in config.js is a key in
+// every visitor's browser, which is how a free quota gets spent by strangers.
+var AI_PROXY_URL = (typeof AI_PROXY !== 'undefined' && AI_PROXY && String(AI_PROXY).indexOf('YOUR_') !== 0)
+  ? String(AI_PROXY).replace(/\/+$/, '') : '';
 (function () {
   function add(key, url, model, strong) {
     if (key && String(key).indexOf('YOUR_') !== 0) AI_PROVIDERS.push({ url: url, key: key, model: model, strong: !!strong });
   }
-  // Fast default chain (used for the bulk of calls):
+  if (AI_PROXY_URL) {
+    // Two entries so aiChain() keeps its meaning: the Worker runs the real chain, and `strong` rides
+    // in the query string because callGroq in mjete-ai.js builds its own body.
+    AI_PROVIDERS.push({ url: AI_PROXY_URL + '/chat', key: '', model: '', strong: false, proxy: true });
+    AI_PROVIDERS.push({ url: AI_PROXY_URL + '/chat?strong=1', key: '', model: '', strong: true, proxy: true });
+    return;
+  }
+  var GROQ = 'https://api.groq.com/openai/v1/chat/completions';
+  var GEMINI = 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions';
+  var groqKey = typeof GROQ_KEY !== 'undefined' ? GROQ_KEY : '';
+  var geminiKey = typeof GEMINI_KEY !== 'undefined' ? GEMINI_KEY : '';
   // 2026-10-25: was llama-3.3-70b-versatile. Groq retired it along with
   // llama-3.1-8b-instant, gemma2-9b-it and kimi-k2; asking the key directly, it
   // can list exactly four chat models and gpt-oss is the usable pair. See the
   // REASONING note below — the replacements think before they answer.
-  add(typeof GROQ_KEY       !== 'undefined' ? GROQ_KEY       : '', 'https://api.groq.com/openai/v1/chat/completions',   'openai/gpt-oss-20b');
-  add(typeof CEREBRAS_KEY   !== 'undefined' ? CEREBRAS_KEY   : '', 'https://api.cerebras.ai/v1/chat/completions',       'gpt-oss-120b');
-  add(typeof GEMINI_KEY     !== 'undefined' ? GEMINI_KEY     : '', 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', 'gemini-2.5-flash');
-  // Stronger reasoners for the critical calls — reuse the EXISTING free Groq/Cerebras keys (no new key, CORS-OK).
-  // If a model id is ever retired, the call just falls back to the fast chain. To swap, edit the model id here.
-  // 2026-10-25: was moonshotai/kimi-k2-instruct, which Groq no longer serves.
-  add(typeof GROQ_KEY       !== 'undefined' ? GROQ_KEY       : '', 'https://api.groq.com/openai/v1/chat/completions',   'openai/gpt-oss-120b',             true);
-  add(typeof CEREBRAS_KEY   !== 'undefined' ? CEREBRAS_KEY   : '', 'https://api.cerebras.ai/v1/chat/completions',       'qwen-3-235b-a22b-instruct-2507',  true);
+  //
+  // 2026-10-28: Cerebras removed. Its free tier answers 402 "Payment required" to
+  // every call since August 2026, and as the LAST entry of the fast chain its 402
+  // was the error a visitor saw in place of the real one (a Groq 429). The two Groq
+  // models count their limits separately, so each backs up the other before Google
+  // is asked. Google comes last: 2.5-flash-lite (~800 requests a day) and then
+  // 2.5-flash (~20 a day, which the web search below also spends).
+  add(groqKey,   GROQ,   'openai/gpt-oss-20b');
+  add(groqKey,   GROQ,   'openai/gpt-oss-120b', true);
+  add(geminiKey, GEMINI, 'gemini-2.5-flash-lite');
+  add(geminiKey, GEMINI, 'gemini-2.5-flash');
 })();
 
 function aiReady() { return AI_PROVIDERS.length > 0; }
@@ -84,11 +102,33 @@ function withTimeout(signal, ms) {
 var AI_REASONER = /gpt-oss|qwen3|deepseek-r1|thinking|reason|-r1\b/i;
 var AI_REASONER_MIN_TOKENS = 500;
 
+// GEMINI THINKS TOO, and the same way. Measured 2026-10-28 on Google's
+// OpenAI-compatible endpoint at a 90-token budget (the size of home.js's daily
+// tip): gemini-2.5-flash returned 2 characters with finish_reason "length",
+// having spent the budget thinking; with reasoning_effort "none" it answered in
+// full. 2.5-flash-lite answered in full either way, and "low" (which switches
+// thinking ON) truncated it. So Gemini gets "none", the opposite of Groq's "low":
+// gpt-oss refuses "none" outright (400, measured the same day).
+var AI_GEMINI_NO_THINKING = /gemini-2\.5-flash/i;
+
 function aiReasonerExtras(p, payload) {
+  if (p.url.indexOf('generativelanguage.googleapis.com') !== -1 && AI_GEMINI_NO_THINKING.test(p.model)) {
+    return { reasoning_effort: 'none' };
+  }
   if (p.url.indexOf('groq.com') === -1 || !AI_REASONER.test(p.model)) return null;
   var extra = { reasoning_effort: 'low', include_reasoning: false };
   if (!(payload.max_tokens > AI_REASONER_MIN_TOKENS)) extra.max_tokens = AI_REASONER_MIN_TOKENS;
   return extra;
+}
+
+// Did the model actually say anything? A 200 with empty content is not an answer, and
+// before 2026-10-28 aiFetch returned it as one: the home tip and the bookmark note showed
+// nothing at all. Reads a clone, so the caller can still read the Response itself.
+function aiHasContent(res) {
+  return res.clone().json().then(function (d) {
+    var c = d && d.choices && d.choices[0] && d.choices[0].message && d.choices[0].message.content;
+    return !!String(c || '').trim();
+  }, function () { return false; });
 }
 
 function aiFetch(opts, strong) {
@@ -98,25 +138,35 @@ function aiFetch(opts, strong) {
   var signal = opts && opts.signal;
   var chain = (typeof aiChain === 'function') ? aiChain(strong) : AI_PROVIDERS;  // strong -> prefer strong reasoners
   if (!chain.length) return Promise.reject(new Error('No AI provider key configured'));
+  if (AI_PROXY_URL) chain = chain.slice(0, 1);                  // the Worker walks the real chain itself
+  // A 429 is the most useful thing to report when nothing answers ("try again shortly"),
+  // so it is kept and returned instead of whichever error happened to come last.
+  var limited = null;
   function tryP(i) {
     var p = chain[i];
-    var body = JSON.stringify(Object.assign({ model: p.model }, payload, aiReasonerExtras(p, payload)));
+    var body = JSON.stringify(Object.assign(p.proxy ? {} : { model: p.model }, payload, p.proxy ? null : aiReasonerExtras(p, payload)));
     var t = withTimeout(signal, AI_TIMEOUT_MS);
     return fetch(p.url, {
       method: 'POST', signal: t.signal,
-      headers: { 'Authorization': 'Bearer ' + p.key, 'Content-Type': 'application/json' },
+      headers: p.proxy ? { 'Content-Type': 'application/json' }
+                       : { 'Authorization': 'Bearer ' + p.key, 'Content-Type': 'application/json' },
       body: body
     }).then(function (res) {
       t.done();
-      if (res.ok) return res;                                   // success
+      if (res.ok) {
+        if (i + 1 >= chain.length) return res;                  // last one: the caller handles an empty answer
+        return aiHasContent(res).then(function (has) { return has ? res : tryP(i + 1); });
+      }
+      if (res.status === 429 && !limited) limited = res;
       if (i + 1 < chain.length) return tryP(i + 1);             // bad key / rate-limit -> next provider
-      return res;                                               // last one: let caller read the error
+      return limited || res;                                    // last one: let caller read the error
     }).catch(function (err) {
       t.done();
       // user cancel propagates; a timeout only advances the chain
       if (err && err.name === 'AbortError' && !(signal && signal.aborted) && i + 1 < chain.length) return tryP(i + 1);
-      if (err && err.name === 'AbortError') throw err;
+      if (err && err.name === 'AbortError' && signal && signal.aborted) throw err;   // the user cancelled
       if (i + 1 < chain.length) return tryP(i + 1);             // network error -> next provider
+      if (limited) return limited;
       throw err;
     });
   }
@@ -128,12 +178,13 @@ function aiFetch(opts, strong) {
 // caller treats any rejection as "skip semantic, keep keyword grounding".
 function aiEmbed(texts) {
   var k = (typeof GEMINI_KEY !== 'undefined') ? GEMINI_KEY : '';
-  if (!k || String(k).indexOf('YOUR_') === 0) return Promise.reject(new Error('no embed key'));
+  if (!AI_PROXY_URL && (!k || String(k).indexOf('YOUR_') === 0)) return Promise.reject(new Error('no embed key'));
   var t = withTimeout(undefined, AI_TIMEOUT_MS);
-  return fetch('https://generativelanguage.googleapis.com/v1beta/openai/embeddings', {
+  return fetch(AI_PROXY_URL ? AI_PROXY_URL + '/embed' : 'https://generativelanguage.googleapis.com/v1beta/openai/embeddings', {
     method: 'POST', signal: t.signal,
-    headers: { 'Authorization': 'Bearer ' + k, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: 'gemini-embedding-001', input: texts })
+    headers: AI_PROXY_URL ? { 'Content-Type': 'application/json' }
+                          : { 'Authorization': 'Bearer ' + k, 'Content-Type': 'application/json' },
+    body: JSON.stringify(AI_PROXY_URL ? { input: texts } : { model: 'gemini-embedding-001', input: texts })
   }).then(function (r) {
     t.done();
     if (!r.ok) throw new Error('embed HTTP ' + r.status);
@@ -212,19 +263,37 @@ function extractDeadlines(text){
 
 // Web-grounded answer via Gemini's native Google-Search tool: returns { text, sources:[{title,uri}] }.
 // Uses the existing Gemini key; rejects (gracefully) when no key / quota / HTTP error.
+// 2026-10-28: thinking switched off, and flash-lite behind flash. Measured that day: with thinking
+// off, 2.5-flash grounded the same question with 8 sources, and flash-lite with 5; flash also
+// answered 503 "high demand" on the first try, and its ~20 requests a day are shared with the chat
+// fallback, so a spent or busy flash now falls to lite instead of making the web block disappear.
+var AI_GROUND_MODELS = ['gemini-2.5-flash', 'gemini-2.5-flash-lite'];
+function aiGroundBody(query) {
+  return JSON.stringify({
+    contents: [{ parts: [{ text: String(query || '') }] }],
+    tools: [{ google_search: {} }],
+    generationConfig: { temperature: 0.2, maxOutputTokens: 700, thinkingConfig: { thinkingBudget: 0 } }
+  });
+}
 function aiGroundedSearch(query, signal) {
   var k = (typeof GEMINI_KEY !== 'undefined') ? GEMINI_KEY : '';
-  if (!k || String(k).indexOf('YOUR_') === 0) return Promise.reject(new Error('no gemini key'));
-  var t = withTimeout(signal, AI_TIMEOUT_MS);
-  return fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + encodeURIComponent(k), {
-    method: 'POST', signal: t.signal,
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: String(query || '') }] }],
-      tools: [{ google_search: {} }],
-      generationConfig: { temperature: 0.2, maxOutputTokens: 700 }
-    })
-  }).then(function (r) { t.done(); if (!r.ok) throw new Error('ground HTTP ' + r.status); return r.json(); }, function (e) { t.done(); throw e; })
+  if (!AI_PROXY_URL && (!k || String(k).indexOf('YOUR_') === 0)) return Promise.reject(new Error('no gemini key'));
+  function tryModel(i) {
+    var t = withTimeout(signal, AI_TIMEOUT_MS);
+    var url = AI_PROXY_URL ? AI_PROXY_URL + '/ground'
+      : 'https://generativelanguage.googleapis.com/v1beta/models/' + AI_GROUND_MODELS[i] + ':generateContent?key=' + encodeURIComponent(k);
+    return fetch(url, {
+      method: 'POST', signal: t.signal,
+      headers: { 'Content-Type': 'application/json' },
+      body: AI_PROXY_URL ? JSON.stringify({ query: String(query || '') }) : aiGroundBody(query)
+    }).then(function (r) {
+      t.done();
+      if (r.ok) return r.json();
+      if (!AI_PROXY_URL && (r.status === 429 || r.status >= 500) && i + 1 < AI_GROUND_MODELS.length) return tryModel(i + 1);
+      throw new Error('ground HTTP ' + r.status);
+    }, function (e) { t.done(); throw e; });
+  }
+  return tryModel(0)
     .then(function (d) {
       var cand = d && d.candidates && d.candidates[0];
       var text = ((cand && cand.content && cand.content.parts) || []).map(function (p) { return p.text || ''; }).join(' ').replace(/\s+/g, ' ').trim();

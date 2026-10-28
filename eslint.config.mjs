@@ -8,7 +8,7 @@ export default [{
       Worker:"readonly",DOMParser:"readonly",Event:"readonly",KeyboardEvent:"readonly",Blob:"readonly",
       URL:"readonly",FileReader:"readonly",Image:"readonly",DOMException:"readonly",
       NodeFilter:"readonly",getComputedStyle:"readonly",
-      GROQ_KEY:"readonly",CEREBRAS_KEY:"readonly",GEMINI_KEY:"readonly",
+      GROQ_KEY:"readonly",GEMINI_KEY:"readonly",AI_PROXY:"readonly",aiReasonerExtras:"readonly",
       LOGIN_USER:"readonly",LOGIN_PASS:"readonly",LOGIN_USER2:"readonly",LOGIN_PASS2:"readonly",
       LOGIN_USER3:"readonly",LOGIN_PASS3:"readonly",
       aiFetch:"readonly",aiErrMsg:"readonly",aiReady:"readonly",aiEmbed:"readonly",aiChain:"readonly",

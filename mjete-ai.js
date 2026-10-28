@@ -381,10 +381,7 @@
       if (!aiConfigured()) { toolFail(resultEl, 'Shërbimi AI nuk është i konfiguruar (mungon çelësi).'); return; }
 
       aiFetch({
-        method: 'POST',
-        headers: { 'Authorization': 'Bearer ' + GROQ_KEY, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'llama-3.3-70b-versatile',
           max_tokens: 350,
           messages: [
             { role: 'system', content: _SYS_HOME },
@@ -413,10 +410,7 @@
       _wizFreeAnswer.textContent = 'Duke menduar…';
 
       aiFetch({
-        method: 'POST',
-        headers: { 'Authorization': 'Bearer ' + GROQ_KEY, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'llama-3.3-70b-versatile',
           max_tokens: 350,
           messages: [
             { role: 'system', content: _SYS_HOME },

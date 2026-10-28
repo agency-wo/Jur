@@ -58,11 +58,19 @@ jobs:
             mjete-ai.js app.js site.js ai.js home.js ligjet-search.js ligjet-search-worker.js sw.js \
             site.css style.css
 
+      # AI keys. config.js is published with the site, so a key written into it is readable by
+      # every visitor. When the repository variable AI_PROXY names the Cloudflare Worker in
+      # cloudflare-worker/, the keys live only there as Worker secrets and config.js carries none.
+      # Cerebras is gone (its free tier answers 402 since August 2026).
       - name: Inject secrets
+        env:
+          AI_PROXY: ${{ vars.AI_PROXY }}
         run: |
-          echo "const GROQ_KEY = '${{ secrets.GROQ_KEY }}';" > config.js
-          echo "const CEREBRAS_KEY = '${{ secrets.CEREBRAS_KEY }}';" >> config.js
-          echo "const GEMINI_KEY = '${{ secrets.GEMINI_KEY }}';" >> config.js
+          echo "const AI_PROXY = '${AI_PROXY}';" > config.js
+          if [ -z "${AI_PROXY}" ]; then
+            echo "const GROQ_KEY = '${{ secrets.GROQ_KEY }}';" >> config.js
+            echo "const GEMINI_KEY = '${{ secrets.GEMINI_KEY }}';" >> config.js
+          fi
           echo "const LOGIN_USER = '${{ secrets.LOGIN_USER }}';" >> config.js
           echo "const LOGIN_PASS = '${{ secrets.LOGIN_PASS }}';" >> config.js
           echo "const LOGIN_USER2 = '${{ secrets.LOGIN_USER2 }}';" >> config.js
